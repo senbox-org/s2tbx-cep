@@ -1,18 +1,23 @@
 package org.esa.snap.s2tbx.cep;
 
 import org.apache.commons.cli.*;
-import org.esa.snap.s2tbx.cep.executors.*;
 import org.esa.snap.s2tbx.cep.executors.Executor;
+import org.esa.snap.s2tbx.cep.executors.ExecutorType;
 import org.esa.snap.s2tbx.cep.util.Logger;
 import org.esa.snap.s2tbx.cep.util.Utilities;
 
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.file.*;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Simple cloud executor for Sentinel-2 Toolbox.
@@ -110,7 +115,12 @@ public class S2TbxRemoteExecutor {
         try (FileInputStream fis = new FileInputStream(folder.resolve("topology.config").toFile())) {
             props.load(fis);
         } catch (IOException e) {
-            e.printStackTrace();
+            try (InputStream in = S2TbxRemoteExecutor.class.getResourceAsStream("topology.config")) {
+                props.load(in);
+            } catch (IOException e1) {
+                System.out.println("The topology.config file was not found in the jar!");
+            }
+            System.out.println("The topology.config file could not be found alongside the jar! Will use the embedded one.");
         }
     }
 
