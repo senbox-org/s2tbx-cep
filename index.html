@@ -1,0 +1,217 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <title>S2tbx-cep by kraftek</title>
+
+    <link rel="stylesheet" href="stylesheets/styles.css">
+    <link rel="stylesheet" href="stylesheets/github-light.css">
+    <meta name="viewport" content="width=device-width">
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="wrapper">
+      <header>
+        <h1>S2tbx-cep</h1>
+        <p></p>
+
+        <p class="view"><a href="https://github.com/kraftek/s2tbx-cep">View the Project on GitHub <small>kraftek/s2tbx-cep</small></a></p>
+
+
+        <ul>
+          <li><a href="https://github.com/kraftek/s2tbx-cep/zipball/master">Download <strong>ZIP File</strong></a></li>
+          <li><a href="https://github.com/kraftek/s2tbx-cep/tarball/master">Download <strong>TAR Ball</strong></a></li>
+          <li><a href="https://github.com/kraftek/s2tbx-cep">View On <strong>GitHub</strong></a></li>
+        </ul>
+      </header>
+      <section>
+        <h1>
+<a id="sentinel-2-toolbox-cloud-executor" class="anchor" href="#sentinel-2-toolbox-cloud-executor" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Sentinel-2 Toolbox Cloud Executor</h1>
+
+<p>This is a simple demonstrator of the cloud execution capabilities of the ESA Sentinel-2 Toolbox.
+The following picture illustrates the execution topology and flow:</p>
+
+<h1>
+<a id="prerequisites---how-to-configure-the-virtual-machines" class="anchor" href="#prerequisites---how-to-configure-the-virtual-machines" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Prerequisites - how to configure the virtual machines</h1>
+
+<p>Although the demonstrator can run on Windows machines also, below are presented the steps necessary to configure Linux machines.</p>
+
+<h2>
+<a id="step-1-create-virtual-machines" class="anchor" href="#step-1-create-virtual-machines" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 1: Create virtual machines</h2>
+
+<p>Create 3 virtual machines with CentOS 7.</p>
+
+<h2>
+<a id="step-2-install-java" class="anchor" href="#step-2-install-java" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 2: Install Java</h2>
+
+<p>Download the latest JRE from Oracle.
+In a terminal window, go to the location where the rpm was downloaded and execute:</p>
+
+<pre><code>sudo yum localinstall jre-8u92-linux-x64.rpm
+rm jre-8u92-linux-x64.rpm
+sudo alternatives --config java
+</code></pre>
+
+<p>Choose the appropriate java version:</p>
+
+<pre><code>sudo sh -c "echo export JAVA_HOME=/usr/java/jre1.8.0_92 &gt;&gt; /etc/environment"
+</code></pre>
+
+<h2>
+<a id="step-3-install-snap" class="anchor" href="#step-3-install-snap" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 3: Install SNAP</h2>
+
+<p>Download the latest version from <a href="http://step.esa.int">http://step.esa.int</a>.
+Change the permission of the downloaded file to be executable.
+Execute the file using the -c option (in order to install SNAP from command line).
+Follow the on-screen instructions.</p>
+
+<h2>
+<a id="step-4-create-the-master-shared-folder" class="anchor" href="#step-4-create-the-master-shared-folder" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 4: Create the master shared folder</h2>
+
+<p>On the "master" machine open a terminal and do the following:</p>
+
+<pre><code>yum -y install samba samba-client
+mkdir /mnt/share
+chmod 777 /mnt/share
+vi /etc/samba/smb.conf
+</code></pre>
+
+<p>Near line 66: add the following:</p>
+
+<pre><code>unix charset = UTF-8
+dos charset = CP932
+</code></pre>
+
+<p>Near line 90: change (Windows' default):</p>
+
+<pre><code>workgroup = WORKGROUP
+</code></pre>
+
+<p>Near line 96: uncomment and change IP addresses you want to allow.</p>
+
+<pre><code>hosts allow = 127. 10.0.0.
+</code></pre>
+
+<p>In the above, the IPs from 127.<em>.</em>.* and 10.0.0.* are allowed.
+Near line 126: add ( no auth ):</p>
+
+<pre><code>security = user
+passdb backend = tdbsam
+map to guest = Bad User
+</code></pre>
+
+<p>Append the followint to the end of the file:</p>
+
+<pre><code>[share]
+  path = /mnt/share
+  writable = yes
+  guest ok = yes
+  guest only = yes
+  create mode = 0777
+  directory mode = 0777
+  share modes = yes
+</code></pre>
+
+<p>Save and close the file, and then restart (and enable) the smb and nmb services:</p>
+
+<pre><code>systemctl start smb nmb
+systemctl enable smb nmb
+</code></pre>
+
+<h2>
+<a id="step-5-configure-selinux-on-the-master-node" class="anchor" href="#step-5-configure-selinux-on-the-master-node" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 5: Configure SELinux on the master node</h2>
+
+<p>On the master node, run the following in a terminal window:
+    chcon -Rt samba_share_t /mnt/share
+Reboot the machine:
+    reboot</p>
+
+<h2>
+<a id="step-6-mount-the-master-shared-folder-on-the-slave-machines" class="anchor" href="#step-6-mount-the-master-shared-folder-on-the-slave-machines" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 6: Mount the master shared folder on the slave machines</h2>
+
+<p>On each of the "slave" machines mount the shared folder:</p>
+
+<pre><code>mkdir /home/share
+chmod 777 /home/share
+sudo mount.cifs \\\\&lt;master&gt;\\share /home/share -o user=admin password=abc123.
+</code></pre>
+
+<p>To persist the shared folder, edit (sudo) the /etc/fstab file and add the following line:</p>
+
+<pre><code>//&lt;master&gt;/share                      /home/share            cifs    user=admin,password=abc123.,file_mode=0777,dir_mode=0777,noperm       0  0
+</code></pre>
+
+<h2>
+<a id="step-7-configure-sshd-on-slave-machines" class="anchor" href="#step-7-configure-sshd-on-slave-machines" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Step 7: Configure SSHD on slave machines</h2>
+
+<p>Start the SSH daemon service:</p>
+
+<pre><code>sudo systemctl start sshd
+sudo systemctl enable sshd
+exit
+ssh-keygen
+ssh-copy-id -i ~/.ssh/id_rsa.pub admin@&lt;master&gt;
+</code></pre>
+
+<h1>
+<a id="how-to-run-the-executor" class="anchor" href="#how-to-run-the-executor" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>How to run the executor</h1>
+
+<p>The supported arguments of the executable jar are the following:</p>
+
+<pre><code>  -ms,--mastershare
+The shared folder residing on the master node that is visible to all slave nodes.
+
+  -smf,--slavemountfolder
+The folder, local to slave nodes, where the master shared folder is mount.
+
+  -u,--user
+The user name used to connect to remote slave nodes.
+
+  -p,--password
+The password of the user used to connect to remote slave nodes.
+
+  -in,--input
+The folder, relative to the common shared folder, from which the S2 products are to be processed.
+
+  -out,--output
+The folder, relative to the master shared folder, to which the processed products will be written to.
+
+  -sop,--slaveOp
+The name of the SNAP operator to be executed on each of the slave nodes.
+
+  -sargs,--slaveOpArgs
+Parameters of the SNAP operator to be executed on each of the slave nodes.
+
+  -mop,--masterOp
+The name of the SNAP operator to be executed on the master node.
+
+  -margs,--masterOpArgs
+Parameters of the SNAP operator to be executed on the master node.
+
+  -w,--wait
+How long (in minutes) the master node should wait for a slave node to complete its execution.
+</code></pre>
+
+<p>An example of using this command line tool:</p>
+
+<pre><code>java -jar s2tbx-cep-1.0.jar -ms \\masternode\share -smf /mnt/share -u &lt;user&gt; -p &lt;password&gt; -in products -out . -w 10 
+                            -sop NdviOp 
+                            -sargs "-PnirFactor=1.0F -PnirSourceBand=B3 -PredFactor=1.0F -PredSourceBand=B4" 
+                            -mop Mosaic 
+                            -margs "-Pcombine=OR -Pcrs=EPSG:32634 -PeastBound=22.30 -PnorthBound=44.55 -PwestBound=24.45 -PsouthBound=43.45 -PpixelSizeX=0.001 -PpixelSizeY=0.001 -Presampling=Nearest -Porthorectify=false"
+</code></pre>
+
+<p>This example is just to illustrate the invocation syntax. For the Mosaic operator to work, an XML descriptor should be provided to it instead of the command line parameters.</p>
+      </section>
+      <footer>
+        <p>This project is maintained by <a href="https://github.com/kraftek">kraftek</a></p>
+        <p><small>Hosted on GitHub Pages &mdash; Theme by <a href="https://github.com/orderedlist">orderedlist</a></small></p>
+      </footer>
+    </div>
+    <script src="javascripts/scale.fix.js"></script>
+    
+  </body>
+</html>
