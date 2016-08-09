@@ -48,7 +48,8 @@ public class Logger {
     public static void initialize(String masterLogFile) throws IOException {
         synchronized (logger) {
             if (rootLogFile == null) {
-                registerHandler(masterLogFile);
+                rootLogFile = masterLogFile;
+                registerHandler(rootLogFile);
             }
         }
     }

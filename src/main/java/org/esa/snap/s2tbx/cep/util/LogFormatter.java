@@ -11,21 +11,20 @@ import java.util.logging.LogRecord;
  * @author COsmin Cara
  */
 public class LogFormatter extends Formatter {
+    private final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+
     @Override
     public String format(LogRecord record) {
         String level = record.getLevel().getName();
-        String buffer = formatTime(record.getMillis()) +
+        return formatTime(record.getMillis()) +
                 "\t" +
                 "[" + level + "]" +
                 "\t" + (level.length() < 6 ? "\t" : "") +
                 record.getMessage() +
                 "\n";
-        return buffer;
     }
 
     private String formatTime(long millis) {
-        SimpleDateFormat date_format = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-        Date resultDate = new Date(millis);
-        return date_format.format(resultDate);
+        return dateFormat.format(new Date(millis));
     }
 }

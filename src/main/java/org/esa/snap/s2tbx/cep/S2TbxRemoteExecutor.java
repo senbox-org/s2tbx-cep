@@ -30,6 +30,7 @@ public class S2TbxRemoteExecutor {
     private static Properties props;
     private static Path masterSharedFolder;
     private static Path slaveMountFolder;
+    private static final ExecutorService executorService;
 
     static {
         options = new Options();
@@ -122,12 +123,13 @@ public class S2TbxRemoteExecutor {
             }
             System.out.println("The topology.config file could not be found alongside the jar! Will use the embedded one.");
         }
+        executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
     public static void main(String[] args) throws Exception {
         if (args.length < options.getRequiredOptions().size() * 2) {
             HelpFormatter formatter = new HelpFormatter();
-            formatter.printHelp("s2tbx-cep", options);
+            formatter.printHelp("java -jar s2tbx-cep-1.0.jar", options);
             System.exit(0);
         }
         CommandLineParser parser = new DefaultParser();
@@ -196,7 +198,7 @@ public class S2TbxRemoteExecutor {
         logger.info("Retrieving the list of available operators");
         List<String> arg = new ArrayList<>();
         arg.add(templates.get(osSuffix).masterGptCommand);
-        Executor gptExecutor = Executor.create(ExecutorType.PROCESS, "master", arg, null);
+        Executor gptExecutor = Executor.create(ExecutorType.PROCESS, "master", arg, false, null);
         List<String> outLines = new ArrayList<>();
         gptExecutor.execute(outLines, false);
         Set<String> opNames = extractOperatorNames(outLines);
@@ -208,7 +210,7 @@ public class S2TbxRemoteExecutor {
             logger.error("Operator %s is not registered", masterOpName);
             System.exit(-4);
         }
-        ExecutorService executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
+
         List<Path> productFolders = Utilities.listFiles(
                 Constants.CONST_WINDOWS.equals(osSuffix) ?
                         masterSharedFolder.resolve(inputFolder) :
@@ -218,6 +220,21 @@ public class S2TbxRemoteExecutor {
         Map<String, List<String>> jobArguments = new HashMap<>();
         List<String> outFiles = new ArrayList<>();
         List<String> nodeNames = new ArrayList<>(nodes.keySet());
+        /*
+         * Check that the shared folder is mount on slaves
+         */
+        CountDownLatch sharedCounter = new CountDownLatch(nodeNames.size());
+        for (Map.Entry<String, String> node : nodes.entrySet()) {
+            checkPrerequisites(node.getKey(), node.getValue(), commonUser, commonPassword, sharedCounter);
+        }
+        try {
+            sharedCounter.await(1, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            logger.warn("Operation timed out");
+        }
+        /*
+         * Create job arguments for slaves
+         */
         for (Path productFolder : productFolders) {
             try {
                 Optional<Path> xmlFile = Utilities.findFirst(productFolder, ".xml");
@@ -245,7 +262,10 @@ public class S2TbxRemoteExecutor {
                 logger.error(e.getMessage());
             }
         }
-        CountDownLatch sharedCounter = new CountDownLatch(jobArguments.size());
+        /*
+         * Execute the jobs on slaves
+         */
+        sharedCounter = new CountDownLatch(jobArguments.size());
         for (Map.Entry<String, List<String>> entry : jobArguments.entrySet()) {
             Executor sshExecutor = Executor.create(ExecutorType.SSH2, entry.getKey(), entry.getValue(), sharedCounter);
             sshExecutor.setUser(commonUser);
@@ -257,6 +277,9 @@ public class S2TbxRemoteExecutor {
         } catch (InterruptedException e) {
             logger.warn("Operation timed out");
         }
+        /*
+         * Execute the master job
+         */
         String masterCmdLine = templates.get(osSuffix).masterExecCommand
                                         .replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
                                         .replace(Constants.PLACEHOLDER_MASTER_OPERATOR, masterOpName)
@@ -269,8 +292,62 @@ public class S2TbxRemoteExecutor {
         } catch (InterruptedException e) {
             logger.warn("Operation timed out");
         }
+        /*
+         * Do the cleanup on slaves
+         */
+        sharedCounter = new CountDownLatch(nodeNames.size());
+        for (Map.Entry<String, String> node : nodes.entrySet()) {
+            cleanup(node.getKey(), node.getValue(), commonUser, commonPassword, sharedCounter);
+        }
+        try {
+            sharedCounter.await(1, TimeUnit.MINUTES);
+        } catch (InterruptedException e) {
+            logger.warn("Operation timed out");
+        }
+
         executorService.shutdown();
         System.exit(0);
+    }
+
+    private static void checkPrerequisites(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
+        Executor executor = Executor.create(ExecutorType.SSH2,
+                nodeName,
+                new ArrayList<String>() {{
+                    add("mkdir");
+                    add(normalizePath(slaveMountFolder, nodeType));
+                    add(Constants.SHELL_COMMAND_SEPARATOR);
+                    add("chmod");
+                    add("777");
+                    add(normalizePath(slaveMountFolder, nodeType));
+                    add(Constants.SHELL_COMMAND_SEPARATOR);
+                    add("mount.cifs");
+                    add(normalizePath(masterSharedFolder, nodeType));
+                    add(normalizePath(slaveMountFolder, nodeType));
+                    add("-o");
+                    add(String.format("user=%s,password=%s,file_mode=0777,dir_mode=0777,noperm", usr, pwd));
+                }},
+                true,
+                sharedCounter);
+        executor.setUser(usr);
+        executor.setPassword(pwd);
+        executorService.submit(executor);
+    }
+
+    private static void cleanup(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
+        Executor executor = Executor.create(ExecutorType.SSH2,
+                nodeName,
+                new ArrayList<String>() {{
+                    add("umount");
+                    add(normalizePath(slaveMountFolder, nodeType));
+                    add(Constants.SHELL_COMMAND_SEPARATOR);
+                    add("rmdir");
+                    add(normalizePath(slaveMountFolder, nodeType));
+                }},
+                true,
+                sharedCounter);
+        executor.setUser(usr);
+        executor.setPassword(pwd);
+        executorService.submit(executor);
     }
 
     private static Set<String> extractOperatorNames(List<String> lines) {

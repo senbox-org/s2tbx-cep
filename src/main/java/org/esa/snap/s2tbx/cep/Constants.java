@@ -39,4 +39,5 @@ public class Constants {
     public static final String PLACEHOLDER_MASTER_ARGS = "$margs";
     public static final String CONST_WINDOWS = "windows";
     public static final String CONST_LINUX = "linux";
+    public static final String SHELL_COMMAND_SEPARATOR = ";";
 }

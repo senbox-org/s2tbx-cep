@@ -21,20 +21,25 @@ public abstract class Executor implements Runnable {
     protected List<String> arguments;
     protected Logger.CustomLogger logger;
     protected int retCode;
+    protected boolean asSuperUser;
     protected CountDownLatch counter;
 
     public static Executor create(ExecutorType type, String host, List<String> arguments, CountDownLatch synchronisationCounter) {
-        return create(type, host, arguments, synchronisationCounter, "exec");
+        return create(type, host, arguments, false, synchronisationCounter, "exec");
     }
 
-    public static Executor create(ExecutorType type, String host, List<String> arguments, CountDownLatch synchronisationCounter, String mode) {
+    public static Executor create(ExecutorType type, String host, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter) {
+        return create(type, host, arguments, asSuperUser, synchronisationCounter, "exec");
+    }
+
+    public static Executor create(ExecutorType type, String host, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter, String mode) {
         Executor executor = null;
         switch (type) {
             case PROCESS:
-                executor = new ProcessExecutor(host, arguments, synchronisationCounter);
+                executor = new ProcessExecutor(host, arguments, asSuperUser, synchronisationCounter);
                 break;
             case SSH2:
-                executor = new SSHExecutor(host, arguments, synchronisationCounter, mode);
+                executor = new SSHExecutor(host, arguments, asSuperUser, synchronisationCounter, mode);
                 break;
         }
         return executor;
@@ -47,12 +52,13 @@ public abstract class Executor implements Runnable {
      * @param args          The arguments
      * @param sharedCounter The shared latch counter.
      */
-    public Executor(String host, List<String> args, CountDownLatch sharedCounter) {
+    public Executor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
         this.isStopped = false;
         this.wasCancelled = false;
         this.host = host;
         this.arguments = args;
         this.counter = sharedCounter;
+        this.asSuperUser = asSU;
         logger = Logger.getRootLogger();
     }
 
@@ -87,11 +93,12 @@ public abstract class Executor implements Runnable {
     public void run() {
         try {
             retCode = execute(null, true);
-            logger.info("Node %s execution returned %s", host, retCode);
+            logger.info("[[%s]] completed %s", host, retCode == 0 ? "OK" : "NOK (code " + String.valueOf(retCode) + ")");
         } catch (Exception e) {
-            logger.error("Node %s produced an error: %s", host, e.getMessage());
+            logger.error("[[%s]] produced an error: %s", host, e.getMessage());
         }
     }
+
     /**
      * Performs the actual execution, optionally logging the execution output and returning the output as a list
      * of messages.

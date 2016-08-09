@@ -6,7 +6,7 @@
 
     <groupId>org.esa.snap</groupId>
     <artifactId>s2tbx-cep</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <packaging>jar</packaging>
 
     <name>Sentinel-2 Toolbox Simple Cloud Orchestrator</name>

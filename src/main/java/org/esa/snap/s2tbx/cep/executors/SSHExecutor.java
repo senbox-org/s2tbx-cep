@@ -1,6 +1,7 @@
 package org.esa.snap.s2tbx.cep.executors;
 
 import com.jcraft.jsch.*;
+import org.esa.snap.s2tbx.cep.Constants;
 
 import java.io.*;
 import java.util.List;
@@ -15,25 +16,28 @@ public class SSHExecutor extends Executor {
 
     private String mode;
 
-    public SSHExecutor(String host, List<String> args, CountDownLatch sharedCounter) {
-        super(host, args, sharedCounter);
+    public SSHExecutor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
+        super(host, args, asSU, sharedCounter);
         this.mode = "exec";
     }
 
-    public SSHExecutor(String host, List<String> args, CountDownLatch sharedCounter, String mode) {
-        super(host, args, sharedCounter);
+    public SSHExecutor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter, String mode) {
+        super(host, args, asSU, sharedCounter);
         this.mode = mode;
     }
 
     @Override
     public int execute(List<String> outLines, boolean logMessages) throws IOException, InterruptedException, JSchException {
+        if (!"exec".equalsIgnoreCase(this.mode) && asSuperUser) {
+            throw new UnsupportedOperationException("Mode not permitted");
+        }
         BufferedReader outReader;
         int ret = -1;
         Session session = null;
         Channel channel = null;
         try {
             String cmdLine = String.join(" ", arguments);
-            logger.info("Invoking on " + host + ": " + cmdLine);
+            logger.info("[[" + host + "]] " + cmdLine);
             JSch jSch = new JSch();
             //jSch.setKnownHosts("D:\\known_hosts");
             session = jSch.getSession(this.user, this.host, 22);
@@ -42,9 +46,29 @@ public class SSHExecutor extends Executor {
             session.setConfig("StrictHostKeyChecking", "no");
             session.connect();
             channel = session.openChannel(this.mode);
+            if (asSuperUser) {
+                int idx = 0;
+                while (idx < arguments.size()) {
+                    if (Constants.SHELL_COMMAND_SEPARATOR.equals(arguments.get(idx))) {
+                        arguments.add(idx + 1, "sudo");
+                        arguments.add(idx + 2, "-S");
+                        arguments.add(idx + 3, "-p");
+                        arguments.add(idx + 4, "''");
+                    }
+                    idx++;
+                }
+                cmdLine = "sudo -S -p '' " + String.join(" ", arguments);
+            }
             ((ChannelExec) channel).setCommand(cmdLine);
             channel.setInputStream(null);
             InputStream inputStream = channel.getInputStream();
+            ((ChannelExec) channel).setPty(asSuperUser);
+            channel.connect();
+            if (asSuperUser) {
+                OutputStream outputStream = channel.getOutputStream();
+                outputStream.write((this.password + "\n").getBytes());
+                outputStream.flush();
+            }
             ((ChannelExec) channel).setErrStream(new ByteArrayOutputStream() {
                 @Override
                 public synchronized void write(byte[] b, int off, int len) {
@@ -54,16 +78,15 @@ public class SSHExecutor extends Executor {
                     }
                 }
             });
-            channel.connect();
             outReader = new BufferedReader(new InputStreamReader(inputStream));
             while (!isStopped()) {
                 while (!isStopped && outReader.ready()) {
                     String line = outReader.readLine();
                     if (line != null && !"".equals(line.trim())) {
-                        if (outLines != null) {
+                        if (outLines != null && !this.password.equals(line)) {
                             outLines.add(line);
                         }
-                        if (logMessages) {
+                        if (logMessages && !this.password.equals(line)) {
                             this.logger.info(line);
                         }
                     }
@@ -78,7 +101,7 @@ public class SSHExecutor extends Executor {
             }
             ret = channel.getExitStatus();
         } catch (IOException | JSchException e) {
-            logger.error("Invocation of %s failed: %s", host, e.getMessage());
+            logger.error("[[%s]] failed: %s", host, e.getMessage());
             wasCancelled = true;
             throw e;
         } finally {
