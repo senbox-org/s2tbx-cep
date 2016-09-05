@@ -94,6 +94,10 @@ public abstract class Executor implements Runnable {
         try {
             retCode = execute(null, true);
             logger.info("[[%s]] completed %s", host, retCode == 0 ? "OK" : "NOK (code " + String.valueOf(retCode) + ")");
+            if (this.counter != null) {
+                counter.countDown();
+                logger.info(String.format("Active nodes: %s", this.counter.getCount()));
+            }
         } catch (Exception e) {
             logger.error("[[%s]] produced an error: %s", host, e.getMessage());
         }

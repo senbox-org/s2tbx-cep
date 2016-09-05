@@ -79,10 +79,6 @@ public class ProcessExecutor extends Executor {
                 closeStream(process.getInputStream());
                 closeStream(process.getOutputStream());
             }
-            if (counter != null) {
-                counter.countDown();
-                logger.info("Remaining active nodes: %s", counter.getCount());
-            }
         }
 
         return ret;

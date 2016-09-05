@@ -135,7 +135,8 @@ public class S2TbxRemoteExecutor {
         CommandLineParser parser = new DefaultParser();
         CommandLine commandLine = parser.parse(options, args);
         Path folder = new File(S2TbxRemoteExecutor.class.getProtectionDomain().getCodeSource().getLocation().getFile()).toPath();
-        Logger.initialize(folder.resolve("s2cep.log").toAbsolutePath().toString());
+        System.out.println(folder.toString());
+        Logger.initialize(folder.resolveSibling("s2cep.log").toAbsolutePath().toString());
         Logger.CustomLogger logger = Logger.getRootLogger();
 
         LinkedHashMap<String, String> nodes = new LinkedHashMap<>();
@@ -391,9 +392,9 @@ public class S2TbxRemoteExecutor {
     }
 
     private static class CommandTemplate {
-        public String masterGptCommand;
-        public String masterExecCommand;
-        public String slaveGptCommand;
-        public String slaveExecCommand;
+        String masterGptCommand;
+        String masterExecCommand;
+        String slaveGptCommand;
+        String slaveExecCommand;
     }
 }

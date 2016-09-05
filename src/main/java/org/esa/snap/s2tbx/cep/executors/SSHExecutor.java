@@ -111,10 +111,6 @@ public class SSHExecutor extends Executor {
             if (session != null) {
                 session.disconnect();
             }
-            if (counter != null) {
-                counter.countDown();
-                logger.info("Remaining active nodes: %s", counter.getCount());
-            }
         }
         return ret;
     }
