@@ -3,11 +3,11 @@ package org.esa.snap.s2tbx.cep;
 import org.apache.commons.cli.*;
 import org.esa.snap.s2tbx.cep.executors.Executor;
 import org.esa.snap.s2tbx.cep.executors.ExecutorType;
+import org.esa.snap.s2tbx.cep.util.GraphDescriptor;
 import org.esa.snap.s2tbx.cep.util.Logger;
 import org.esa.snap.s2tbx.cep.util.Utilities;
 
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -18,9 +18,32 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * Simple cloud executor for Sentinel-2 Toolbox.
+ *
+ * A working example (if platform configured) of command line invocation (no line breaks):
+ *
+ * java -jar s2tbx-cep-1.0.jar
+ *          -ms \\s2tb-cep-01.c-s.ro\share
+ *          -smf /mnt/share
+ *          -u admin -p password
+ *          -in products
+ *          -out .
+ *          -w 15
+ *          -sops NdviOp{"-PnirFactor=1.0F -PnirSourceBand=B8 -PredFactor=1.0F -PredSourceBand=B4"}|Resample{"-PtargetResolution=60 -PresampleOnPyramidLevels=false"}
+ *          -mops Mosaic{"-Pvariables=[variable[name=ndvi,expression=ndvi];variable[name=ndvi_flags,expression=ndvi_flags]]
+ *                        -Pcombine=OR -PpixelSizeX=60.0 -PpixelSizeY=60.0 -PwestBound=38.5 -PnorthBound=10.3 -PeastBound=42.9 -PsouthBound=7.7
+ *                        -Pcrs=PROJCS['WGS 84 / UTM zone 36N', GEOGCS['WGS 84', DATUM['World Geodetic System 1984',
+ *                                  SPHEROID['WGS 84', 6378137.0, 298.257223563, AUTHORITY['EPSG','7030']], AUTHORITY['EPSG','6326']],
+ *                                  PRIMEM['Greenwich', 0.0, AUTHORITY['EPSG','8901']], UNIT['degree', 0.017453292519943295], AXIS['Geodetic longitude', EAST],
+ *                                  AXIS['Geodetic latitude', NORTH], AUTHORITY['EPSG','4326']], PROJECTION['Transverse_Mercator', AUTHORITY['EPSG','9807']],
+ *                                  PARAMETER['central_meridian', 9.0], PARAMETER['latitude_of_origin', 0.0], PARAMETER['scale_factor', 0.9996],
+ *                                  PARAMETER['false_easting', 500000.0], PARAMETER['false_northing', 0.0], UNIT['m', 1.0], AXIS['Easting', EAST], AXIS['Northing', NORTH],
+ *                                  AUTHORITY['EPSG','32632']]"}
+ *          -s s2tb-cep-01:linux,s2tb-cep-02:linux
  *
  * @author Cosmin Cara
  */
@@ -31,6 +54,8 @@ public class S2TbxRemoteExecutor {
     private static Path masterSharedFolder;
     private static Path slaveMountFolder;
     private static final ExecutorService executorService;
+    private static final String metadataFilePattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9|_]{6})_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
+    private static final Pattern folderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9|_]{6})_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
 
     static {
         options = new Options();
@@ -55,6 +80,13 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .required()
                 .build());
+        options.addOption(Option.builder(Constants.PARAM_INPUT_LOOKFOR_FOLDERS)
+                .longOpt("folders")
+                .argName("look.for.folders")
+                .desc("Looks for folders to pass to the first operator, instead of metadata files")
+                .hasArg(false)
+                .optionalArg(true)
+                .build());
         options.addOption(Option.builder(Constants.PARAM_OUTPUT)
                 .longOpt("output")
                 .argName("output.folder")
@@ -62,31 +94,17 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .required()
                 .build());
-        options.addOption(Option.builder(Constants.PARAM_SLAVE_OPERATOR)
-                .longOpt("slaveOp")
-                .argName("slave.operator")
-                .desc("Name of the slave SNAP operator")
+        options.addOption(Option.builder(Constants.PARAM_SLAVE_OPERATORS)
+                .longOpt("slaveOps")
+                .argName("slave.operators")
+                .desc("The slave SNAP operators, in the form Op1{\"arguments for Op1\"|Op2{\"arguments for Op2\"...")
                 .hasArg()
                 .required()
                 .build());
-        options.addOption(Option.builder(Constants.PARAM_SLAVE_ARGUMENTS)
-                .longOpt("slaveOpArgs")
-                .argName("slave.operator.arguments")
-                .desc("Parameters of the slave SNAP operator")
-                .hasArg()
-                .required()
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_MASTER_OPERATOR)
-                .longOpt("masterOp")
-                .argName("master.operator")
-                .desc("Name of the master SNAP operator")
-                .hasArg()
-                .required()
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_MASTER_ARGUMENTS)
-                .longOpt("masterOpArgs")
-                .argName("master.operator.arguments")
-                .desc("Parameters of the master SNAP operator")
+        options.addOption(Option.builder(Constants.PARAM_MASTER_OPERATORS)
+                .longOpt("masterOps")
+                .argName("master.operators")
+                .desc("The master SNAP operators, in the form Op1{\"arguments for Op1\"|Op2{\"arguments for Op2\"...")
                 .hasArg()
                 .required()
                 .build());
@@ -111,18 +129,34 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .optionalArg(true)
                 .build());
-        Path folder = new File(S2TbxRemoteExecutor.class.getProtectionDomain().getCodeSource().getLocation().getFile()).toPath();
+        options.addOption(Option.builder(Constants.PARAM_SLAVES)
+                .longOpt("slaves")
+                .argName("slave.nodes")
+                .desc("The names or IPs of the slave nodes. Expected format: nodename1:<windows|linux>,nodename2:<windows|linux>,...")
+                .hasArg()
+                .required()
+                .build());
+        options.addOption(Option.builder(Constants.PARAM_RESUME_MASTER)
+                .longOpt("resume")
+                .argName("resume.master")
+                .desc("Resumes the execution for the master node only")
+                .hasArg(false)
+                .optionalArg(true)
+                .build());
+        //Path folder = new File(S2TbxRemoteExecutor.class.getProtectionDomain().getCodeSource().getLocation().getFile()).toPath();
         props = new Properties();
+/*
         try (FileInputStream fis = new FileInputStream(folder.resolve("topology.config").toFile())) {
             props.load(fis);
         } catch (IOException e) {
+*/
             try (InputStream in = S2TbxRemoteExecutor.class.getResourceAsStream("topology.config")) {
                 props.load(in);
             } catch (IOException e1) {
                 System.out.println("The topology.config file was not found in the jar!");
             }
-            System.out.println("The topology.config file could not be found alongside the jar! Will use the embedded one.");
-        }
+            //System.out.println("The topology.config file could not be found alongside the jar! Will use the embedded one.");
+/*        }*/
         executorService = Executors.newFixedThreadPool(Runtime.getRuntime().availableProcessors());
     }
 
@@ -151,9 +185,9 @@ public class S2TbxRemoteExecutor {
         Enumeration<Object> keys = props.keys();
         while (keys.hasMoreElements()) {
             String key = keys.nextElement().toString().toLowerCase();
-            if (key.startsWith(Constants.KEY_SLAVE_NODE_PREFIX)) {
+            /*if (key.startsWith(Constants.KEY_SLAVE_NODE_PREFIX)) {
                 nodes.put(props.getProperty(key), key.substring(key.lastIndexOf(".") + 1));
-            } else if (key.equals(Constants.SLAVE_COMMAND_LINE_TEMPLATE_LINUX)) {
+            } else */if (key.equals(Constants.SLAVE_COMMAND_LINE_TEMPLATE_LINUX)) {
                 templates.get(Constants.CONST_LINUX).slaveExecCommand = props.getProperty(key);
             } else if (key.equals(Constants.SLAVE_COMMAND_LINE_TEMPLATE_WINDOWS)) {
                 templates.get(Constants.CONST_WINDOWS).slaveExecCommand = props.getProperty(key);
@@ -180,10 +214,48 @@ public class S2TbxRemoteExecutor {
 
         String inputFolder = commandLine.getOptionValue(Constants.PARAM_INPUT);
         String outputFolder = commandLine.getOptionValue(Constants.PARAM_OUTPUT);
-        String slaveOpName = commandLine.getOptionValue(Constants.PARAM_SLAVE_OPERATOR);
-        String slaveOpArgs = commandLine.getOptionValue(Constants.PARAM_SLAVE_ARGUMENTS).replaceAll("\"", "");
-        String masterOpName = commandLine.getOptionValue(Constants.PARAM_MASTER_OPERATOR);
-        String masterOpArgs = commandLine.getOptionValue(Constants.PARAM_MASTER_ARGUMENTS).replaceAll("\"", "");
+        boolean lookForFolders = commandLine.hasOption(Constants.PARAM_INPUT_LOOKFOR_FOLDERS);
+        List<Path> productFolders = Utilities.listFiles(
+                Constants.CONST_WINDOWS.equals(osSuffix) ?
+                        masterSharedFolder.resolve(inputFolder) :
+                        slaveMountFolder.resolve(inputFolder),
+                1);
+        List<Path> inputFiles = new ArrayList<>();
+        for (Path productFolder : productFolders) {
+            Optional<Path> inputFile = Optional.empty();
+            if (!lookForFolders) {
+                inputFile = Utilities.findFirst(productFolder, metadataFilePattern);
+            } else {
+                if (folderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
+                    inputFile = Optional.of(productFolder);
+                }
+            }
+            if (inputFile.isPresent() && Files.exists(inputFile.get())) {
+                logger.info("Found candidate input " + inputFile.get().toString());
+                inputFiles.add(resolve(inputFolder, osSuffix).relativize(inputFile.get().toAbsolutePath()));
+            }
+        }
+
+        String slaveOperatorsString = commandLine.getOptionValue(Constants.PARAM_SLAVE_OPERATORS);
+        String[] slaveOperators = slaveOperatorsString.split("\\|");
+        GraphDescriptor slaveGraph = new GraphDescriptor();
+        for (String slaveOperator : slaveOperators) {
+            int idx = slaveOperator.indexOf("{");
+            String name = slaveOperator.substring(0, idx);
+            String arguments = slaveOperator.substring(idx + 1, slaveOperator.length() - 1);
+            slaveGraph.addNode(name, arguments);
+        }
+
+        String masterOperatorsString = commandLine.getOptionValue(Constants.PARAM_MASTER_OPERATORS);
+        String[] masterOperators = masterOperatorsString.split("\\|");
+        GraphDescriptor masterGraph = new GraphDescriptor();
+        for (String masterOperator : masterOperators) {
+            int idx = masterOperator.indexOf("{");
+            String name = masterOperator.substring(0, idx);
+            String arguments = masterOperator.substring(idx + 1, masterOperator.length() - 1);
+            masterGraph.addNode(name, arguments);
+        }
+
         int waitTimeout;
         if (commandLine.hasOption(Constants.PARAM_TIMEOUT)) {
             waitTimeout = Integer.parseInt(commandLine.getOptionValue(Constants.PARAM_TIMEOUT));
@@ -196,27 +268,13 @@ public class S2TbxRemoteExecutor {
         if (commandLine.hasOption(Constants.PARAM_PASSWORD)) {
             commonPassword = commandLine.getOptionValue(Constants.PARAM_PASSWORD);
         }
-        logger.info("Retrieving the list of available operators");
-        List<String> arg = new ArrayList<>();
-        arg.add(templates.get(osSuffix).masterGptCommand);
-        Executor gptExecutor = Executor.create(ExecutorType.PROCESS, "master", arg, false, null);
-        List<String> outLines = new ArrayList<>();
-        gptExecutor.execute(outLines, false);
-        Set<String> opNames = extractOperatorNames(outLines);
-        if (!opNames.contains(slaveOpName)) {
-            logger.error("Operator %s is not registered", slaveOpName);
-            System.exit(-3);
-        }
-        if (!opNames.contains(masterOpName)) {
-            logger.error("Operator %s is not registered", masterOpName);
-            System.exit(-4);
+
+        String nodeString = commandLine.getOptionValue(Constants.PARAM_SLAVES);
+        String[] tokens = nodeString.split(",");
+        for (String node : tokens) {
+            nodes.put(node.substring(0, node.indexOf(":")), node.substring(node.indexOf(":") + 1));
         }
 
-        List<Path> productFolders = Utilities.listFiles(
-                Constants.CONST_WINDOWS.equals(osSuffix) ?
-                        masterSharedFolder.resolve(inputFolder) :
-                        slaveMountFolder.resolve(inputFolder),
-                1);
         int nodeIndex = 0;
         Map<String, List<String>> jobArguments = new HashMap<>();
         List<String> outFiles = new ArrayList<>();
@@ -236,55 +294,70 @@ public class S2TbxRemoteExecutor {
         /*
          * Create job arguments for slaves
          */
-        for (Path productFolder : productFolders) {
+
+        for (Path inputFile : inputFiles) {
             try {
-                Optional<Path> xmlFile = Utilities.findFirst(productFolder, ".xml");
-                if (xmlFile.isPresent() && Files.exists(xmlFile.get())) {
-                    logger.info("Found candidate metadata file " + xmlFile.get().toString());
-                    String node = nodeNames.get(nodeIndex);
-                    String nodeOS = nodes.get(node);
-                    Path relativeXmlPath = (resolve(inputFolder, osSuffix)).relativize(xmlFile.get().toAbsolutePath());
-                    final String transformedCmdLine = String.format(
-                            templates.get(nodeOS).slaveExecCommand
-                                    .replace(Constants.PLACEHOLDER_GPT, templates.get(nodeOS).slaveGptCommand)
-                                    .replace(Constants.PLACEHOLDER_SLAVE_OPERATOR, slaveOpName)
-                                    .replace(Constants.PLACEHOLDER_SLAVE_ARGS, slaveOpArgs)
-                                    .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(resolve(inputFolder, nodeOS), nodeOS))
-                                    .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, nodeOS), nodeOS)),
-                            normalizePath(relativeXmlPath, nodeOS),
-                            "result_" + String.valueOf(nodeIndex + 1));
-                    jobArguments.put(node, new ArrayList<String>() {{
-                        add(transformedCmdLine);
-                    }});
-                    outFiles.add(resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(nodeIndex + 1) + ".tif").toString());
-                    nodeIndex = (nodeIndex == nodes.size() - 1) ? 0 : nodeIndex + 1;
+                String node = nodeNames.get(nodeIndex);
+                String nodeOS = nodes.get(node);
+                final String transformedCmdLine = String.format(
+                        templates.get(nodeOS).slaveExecCommand
+                                .replace(Constants.PLACEHOLDER_GPT, templates.get(nodeOS).slaveGptCommand)
+                                .replace(Constants.PLACEHOLDER_SHARED_FOLDER, normalizePath(slaveMountFolder, nodeOS))
+                                .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(resolve(inputFolder, nodeOS), nodeOS))
+                                .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, nodeOS), nodeOS)),
+                        String.valueOf(nodeIndex + 1),
+                        normalizePath(inputFile, nodeOS),
+                        "result_" + String.valueOf(nodeIndex + 1));
+                if (!"Read".equals(slaveGraph.getNode(0).getOperator())) {
+                    slaveGraph.insertNode(0, "Read", "\"-Pfile=" + normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS) + "\"");
+                } else {
+                    slaveGraph.getNode(0).setArgument("file", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
                 }
+                Files.write(masterSharedFolder.resolve("slaveGraph" + String.valueOf(nodeIndex + 1) + ".xml"), slaveGraph.toString().getBytes());
+                jobArguments.put(node, new ArrayList<String>() {{
+                    add(transformedCmdLine);
+                }});
+                outFiles.add(resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(nodeIndex + 1) + ".tif").toString());
+                nodeIndex = (nodeIndex == nodes.size() - 1) ? 0 : nodeIndex + 1;
             } catch (Exception e) {
                 logger.error(e.getMessage());
             }
         }
+
         /*
          * Execute the jobs on slaves
          */
-        sharedCounter = new CountDownLatch(jobArguments.size());
-        for (Map.Entry<String, List<String>> entry : jobArguments.entrySet()) {
-            Executor sshExecutor = Executor.create(ExecutorType.SSH2, entry.getKey(), entry.getValue(), sharedCounter);
-            sshExecutor.setUser(commonUser);
-            sshExecutor.setPassword(commonPassword);
-            executorService.submit(sshExecutor);
-        }
-        try {
-            sharedCounter.await(waitTimeout, TimeUnit.MINUTES);
-        } catch (InterruptedException e) {
-            logger.warn("Operation timed out");
+        if (!commandLine.hasOption(Constants.PARAM_RESUME_MASTER)) {
+            sharedCounter = new CountDownLatch(jobArguments.size());
+            for (Map.Entry<String, List<String>> entry : jobArguments.entrySet()) {
+                Executor sshExecutor = Executor.create(ExecutorType.SSH2, entry.getKey(), entry.getValue(), sharedCounter);
+                sshExecutor.setUser(commonUser);
+                sshExecutor.setPassword(commonPassword);
+                executorService.submit(sshExecutor);
+            }
+            try {
+                sharedCounter.await(waitTimeout, TimeUnit.MINUTES);
+            } catch (InterruptedException e) {
+                logger.warn("Operation timed out");
+            }
         }
         /*
          * Execute the master job
          */
+        boolean isMosaic = "Mosaic".equals(masterGraph.getNode(0).getOperator());
+        if (isMosaic) {
+            Files.write(masterSharedFolder.resolve("masterGraph.xml"), masterGraph.getNode(0).parametersToString().getBytes());
+        } else {
+            Files.write(masterSharedFolder.resolve("masterGraph.xml"), masterGraph.toString().getBytes());
+        }
+        outFiles = outFiles.stream()
+                           .map(name -> masterSharedFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
+                           .collect(Collectors.toList());
         String masterCmdLine = templates.get(osSuffix).masterExecCommand
                                         .replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
-                                        .replace(Constants.PLACEHOLDER_MASTER_OPERATOR, masterOpName)
-                                        .replace(Constants.PLACEHOLDER_MASTER_ARGS, masterOpArgs + String.join(" ", outFiles))
+                                        .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p" : "")
+                                        .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterSharedFolder, osSuffix))
+                                        .replace(Constants.PLACEHOLDER_MASTER_INPUT, String.join(" ", outFiles))
                                         .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, osSuffix), osSuffix));
         sharedCounter = new CountDownLatch(1);
         executorService.submit(Executor.create(ExecutorType.PROCESS, "master", Arrays.asList(masterCmdLine.split(" ")), sharedCounter));

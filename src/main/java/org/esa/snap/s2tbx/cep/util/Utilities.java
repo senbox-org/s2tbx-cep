@@ -6,7 +6,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 /**
  * Helper class for various operations.
@@ -59,13 +59,14 @@ public class Utilities {
      * Finds first file of the given extension in the given folder (not recursive).
      *
      * @param folder        The folder in which to search
-     * @param extension     The extension of the file
+     * @param regEx         The file name pattern
      *
      * @throws IOException
      */
-    public static Optional<Path> findFirst(Path folder, String extension) throws IOException {
+    public static Optional<Path> findFirst(Path folder, String regEx) throws IOException {
         List<Path> files = listFiles(folder, 1);
-        return files.stream().filter(p -> p.toString().endsWith(extension)).findFirst();
+        Pattern pattern = Pattern.compile(regEx);
+        return files.stream().filter(p -> pattern.matcher(p.toString()).matches()).findFirst();
     }
 
     /**
