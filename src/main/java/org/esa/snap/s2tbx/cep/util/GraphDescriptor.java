@@ -26,6 +26,10 @@ public class GraphDescriptor {
         return index >= 0 && index < this.nodes.size() ? this.nodes.get(index) : null;
     }
 
+    public int getNodeCount() {
+        return this.nodes.size();
+    }
+
     public void insertNode(int index, String operator, String arguments) {
         if (index >= 0 && index < this.nodes.size()) {
             GraphNode previous = index > 0 ? this.nodes.get(index - 1) : null;

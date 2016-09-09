@@ -6,6 +6,7 @@ package org.esa.snap.s2tbx.cep;
  * @author Cosmin Cara
  */
 public class Constants {
+    public static final String PARAM_MASTER_FOLDER = "mf";
     public static final String PARAM_MASTER_SHARE = "ms";
     public static final String PARAM_SHARE_MOUNT = "smf";
     public static final String PARAM_INPUT = "in";
@@ -18,6 +19,8 @@ public class Constants {
     public static final String PARAM_PASSWORD = "p";
     public static final String PARAM_SLAVES = "s";
     public static final String PARAM_RESUME_MASTER = "r";
+    public static final String PARAM_USE_L1C = "l1c";
+    public static final String PARAM_USE_L2A = "l2a";
     public static final int DEFAULT_TIMEOUT = 15;
     public static final String DEFAULT_PERMISSIONS = "rwxr-xr-x";
     public static final String KEY_SLAVE_NODE_PREFIX = "slave.node";
@@ -33,6 +36,7 @@ public class Constants {
     public static final String SLAVE_PASSWORD = "slave.password";
     public static final String PLACEHOLDER_GPT = "$gpt";
     public static final String PLACEHOLDER_INPUT_FOLDER = "$in";
+    public static final String PLACEHOLDER_INPUT_FILE = "$inputFile";
     public static final String PLACEHOLDER_SHARED_FOLDER = "$smf";
     public static final String PLACEHOLDER_OUTPUT_FOLDER = "$out";
     public static final String PLACEHOLDER_MASTER_INPUT = "$files";

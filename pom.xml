@@ -7,10 +7,8 @@
     <groupId>org.esa.snap</groupId>
     <artifactId>s2tbx-cep</artifactId>
     <version>1.0</version>
-    <modules>
-        <module>../s2tbx-cep-adapter</module>
-    </modules>
-    <packaging>pom</packaging>
+
+    <packaging>jar</packaging>
 
     <name>Sentinel-2 Toolbox Simple Cloud Orchestrator</name>
 

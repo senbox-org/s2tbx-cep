@@ -37,7 +37,6 @@ public class SSHExecutor extends Executor {
         Channel channel = null;
         try {
             String cmdLine = String.join(" ", arguments);
-            logger.info("[[" + host + "]] " + cmdLine);
             JSch jSch = new JSch();
             //jSch.setKnownHosts("D:\\known_hosts");
             session = jSch.getSession(this.user, this.host, 22);
@@ -59,30 +58,31 @@ public class SSHExecutor extends Executor {
                 }
                 cmdLine = "sudo -S -p '' " + String.join(" ", arguments);
             }
+            logger.info("[[" + host + "]] " + cmdLine);
             ((ChannelExec) channel).setCommand(cmdLine);
             channel.setInputStream(null);
-            InputStream inputStream = channel.getInputStream();
             ((ChannelExec) channel).setPty(asSuperUser);
+            ((ChannelExec) channel).setErrStream(new ByteArrayOutputStream() {
+                @Override
+                public synchronized void write(byte[] b, int off, int len) {
+                    String message = new String(b, off, len).replaceAll("\n", "");
+                    if (message.length() > 0) {
+                        logger.info("[" + host + "] " + message);
+                    }
+                }
+            });
+            InputStream inputStream = channel.getInputStream();
             channel.connect();
             if (asSuperUser) {
                 OutputStream outputStream = channel.getOutputStream();
                 outputStream.write((this.password + "\n").getBytes());
                 outputStream.flush();
             }
-            ((ChannelExec) channel).setErrStream(new ByteArrayOutputStream() {
-                @Override
-                public synchronized void write(byte[] b, int off, int len) {
-                    String message = new String(b, off, len).replaceAll("\n", "");
-                    if (message.length() > 0) {
-                        logger.warn("[" + host + "] " + message);
-                    }
-                }
-            });
             outReader = new BufferedReader(new InputStreamReader(inputStream));
+            String line;
             while (!isStopped()) {
-                while (!isStopped && outReader.ready()) {
-                    String line = outReader.readLine();
-                    if (line != null && !"".equals(line.trim())) {
+                while (!isStopped && (line = outReader.readLine()) != null) {
+                    if (!"".equals(line.trim())) {
                         if (outLines != null && !this.password.equals(line)) {
                             outLines.add(line);
                         }

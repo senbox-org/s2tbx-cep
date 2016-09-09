@@ -51,11 +51,14 @@ public class S2TbxRemoteExecutor {
 
     private static Options options;
     private static Properties props;
+    private static Path masterLocalFolder;
     private static Path masterSharedFolder;
     private static Path slaveMountFolder;
     private static final ExecutorService executorService;
-    private static final String metadataFilePattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9|_]{6})_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
-    private static final Pattern folderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9|_]{6})_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
+    private static final String l1cMetadataPattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L1C_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
+    private static final String l2aMetadataPattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L2A_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
+    private static final Pattern l1cFolderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L1C_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
+    private static final Pattern l2aFolderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L2A_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
 
     static {
         options = new Options();
@@ -63,6 +66,13 @@ public class S2TbxRemoteExecutor {
                 .longOpt("slavemountfolder")
                 .argName("slave.mount.folder")
                 .desc("The slave local folder where the master shared folder is mount")
+                .hasArg()
+                .required()
+                .build());
+        options.addOption(Option.builder(Constants.PARAM_MASTER_FOLDER)
+                .longOpt("masterfolder")
+                .argName("master.local.folder")
+                .desc("The local folder (residing on the master node) that will be shared")
                 .hasArg()
                 .required()
                 .build());
@@ -143,6 +153,20 @@ public class S2TbxRemoteExecutor {
                 .hasArg(false)
                 .optionalArg(true)
                 .build());
+        options.addOption(Option.builder(Constants.PARAM_USE_L1C)
+                .longOpt("l1c")
+                .argName("l1c")
+                .desc("Looks for L1C products")
+                .hasArg(false)
+                .optionalArg(true)
+                .build());
+        options.addOption(Option.builder(Constants.PARAM_USE_L2A)
+                .longOpt("l2a")
+                .argName("l2a")
+                .desc("Looks for L2A products")
+                .hasArg(false)
+                .optionalArg(true)
+                .build());
         //Path folder = new File(S2TbxRemoteExecutor.class.getProtectionDomain().getCodeSource().getLocation().getFile()).toPath();
         props = new Properties();
 /*
@@ -168,10 +192,12 @@ public class S2TbxRemoteExecutor {
         }
         CommandLineParser parser = new DefaultParser();
         CommandLine commandLine = parser.parse(options, args);
+
         Path folder = new File(S2TbxRemoteExecutor.class.getProtectionDomain().getCodeSource().getLocation().getFile()).toPath();
-        System.out.println(folder.toString());
         Logger.initialize(folder.resolveSibling("s2cep.log").toAbsolutePath().toString());
         Logger.CustomLogger logger = Logger.getRootLogger();
+
+        printCommandLine(commandLine);
 
         LinkedHashMap<String, String> nodes = new LinkedHashMap<>();
         String commonUser = null, commonPassword = null;
@@ -209,12 +235,18 @@ public class S2TbxRemoteExecutor {
                 commonPassword = props.getProperty(key);
             }
         }
+        masterLocalFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_MASTER_FOLDER));
         masterSharedFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_MASTER_SHARE));
         slaveMountFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_SHARE_MOUNT));
 
         String inputFolder = commandLine.getOptionValue(Constants.PARAM_INPUT);
         String outputFolder = commandLine.getOptionValue(Constants.PARAM_OUTPUT);
+        boolean useL1c = commandLine.hasOption(Constants.PARAM_USE_L1C);
+        boolean useL2a = commandLine.hasOption(Constants.PARAM_USE_L2A);
         boolean lookForFolders = commandLine.hasOption(Constants.PARAM_INPUT_LOOKFOR_FOLDERS);
+        logger.info(String.format("Scanning %s", Constants.CONST_WINDOWS.equals(osSuffix) ?
+                masterSharedFolder.resolve(inputFolder) :
+                slaveMountFolder.resolve(inputFolder)));
         List<Path> productFolders = Utilities.listFiles(
                 Constants.CONST_WINDOWS.equals(osSuffix) ?
                         masterSharedFolder.resolve(inputFolder) :
@@ -224,9 +256,17 @@ public class S2TbxRemoteExecutor {
         for (Path productFolder : productFolders) {
             Optional<Path> inputFile = Optional.empty();
             if (!lookForFolders) {
-                inputFile = Utilities.findFirst(productFolder, metadataFilePattern);
+                if (useL1c) {
+                    inputFile = Utilities.findFirst(productFolder, l1cMetadataPattern);
+                }
+                if (useL2a) {
+                    inputFile = Utilities.findFirst(productFolder, l2aMetadataPattern);
+                }
             } else {
-                if (folderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
+                if (useL1c && l1cFolderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
+                    inputFile = Optional.of(productFolder);
+                }
+                if (useL2a && l2aFolderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
                     inputFile = Optional.of(productFolder);
                 }
             }
@@ -235,7 +275,7 @@ public class S2TbxRemoteExecutor {
                 inputFiles.add(resolve(inputFolder, osSuffix).relativize(inputFile.get().toAbsolutePath()));
             }
         }
-
+        logger.info(String.format("%s products found", inputFiles.size()));
         String slaveOperatorsString = commandLine.getOptionValue(Constants.PARAM_SLAVE_OPERATORS);
         String[] slaveOperators = slaveOperatorsString.split("\\|");
         GraphDescriptor slaveGraph = new GraphDescriptor();
@@ -282,7 +322,8 @@ public class S2TbxRemoteExecutor {
         /*
          * Check that the shared folder is mount on slaves
          */
-        CountDownLatch sharedCounter = new CountDownLatch(nodeNames.size());
+        CountDownLatch sharedCounter = null;
+        /*CountDownLatch sharedCounter = new CountDownLatch(nodeNames.size());
         for (Map.Entry<String, String> node : nodes.entrySet()) {
             checkPrerequisites(node.getKey(), node.getValue(), commonUser, commonPassword, sharedCounter);
         }
@@ -290,7 +331,7 @@ public class S2TbxRemoteExecutor {
             sharedCounter.await(1, TimeUnit.MINUTES);
         } catch (InterruptedException e) {
             logger.warn("Operation timed out");
-        }
+        }*/
         /*
          * Create job arguments for slaves
          */
@@ -299,25 +340,31 @@ public class S2TbxRemoteExecutor {
             try {
                 String node = nodeNames.get(nodeIndex);
                 String nodeOS = nodes.get(node);
+                String outFile = resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(nodeIndex + 1) + ".tif").toString();
                 final String transformedCmdLine = String.format(
                         templates.get(nodeOS).slaveExecCommand
                                 .replace(Constants.PLACEHOLDER_GPT, templates.get(nodeOS).slaveGptCommand)
                                 .replace(Constants.PLACEHOLDER_SHARED_FOLDER, normalizePath(slaveMountFolder, nodeOS))
+                                .replace(Constants.PLACEHOLDER_INPUT_FILE, outFile)
                                 .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(resolve(inputFolder, nodeOS), nodeOS))
                                 .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, nodeOS), nodeOS)),
                         String.valueOf(nodeIndex + 1),
                         normalizePath(inputFile, nodeOS),
                         "result_" + String.valueOf(nodeIndex + 1));
-                if (!"Read".equals(slaveGraph.getNode(0).getOperator())) {
+                if (shouldInsertReadOp(slaveGraph)) {
                     slaveGraph.insertNode(0, "Read", "\"-Pfile=" + normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS) + "\"");
                 } else {
-                    slaveGraph.getNode(0).setArgument("file", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
+                    if ("Read".equals(slaveGraph.getNode(0).getOperator())) {
+                        slaveGraph.getNode(0).setArgument("file", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
+                    } else if ("Sen2Cor".equals(slaveGraph.getNode(0).getOperator())) {
+                        slaveGraph.getNode(0).setArgument("sourceFolder", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
+                    }
                 }
-                Files.write(masterSharedFolder.resolve("slaveGraph" + String.valueOf(nodeIndex + 1) + ".xml"), slaveGraph.toString().getBytes());
+                Files.write(masterLocalFolder.resolve("slaveGraph" + String.valueOf(nodeIndex + 1) + ".xml"), slaveGraph.toString().getBytes());
                 jobArguments.put(node, new ArrayList<String>() {{
                     add(transformedCmdLine);
                 }});
-                outFiles.add(resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(nodeIndex + 1) + ".tif").toString());
+                outFiles.add(outFile);
                 nodeIndex = (nodeIndex == nodes.size() - 1) ? 0 : nodeIndex + 1;
             } catch (Exception e) {
                 logger.error(e.getMessage());
@@ -328,35 +375,41 @@ public class S2TbxRemoteExecutor {
          * Execute the jobs on slaves
          */
         if (!commandLine.hasOption(Constants.PARAM_RESUME_MASTER)) {
+            Set<Executor> processes = new HashSet<>();
             sharedCounter = new CountDownLatch(jobArguments.size());
             for (Map.Entry<String, List<String>> entry : jobArguments.entrySet()) {
                 Executor sshExecutor = Executor.create(ExecutorType.SSH2, entry.getKey(), entry.getValue(), sharedCounter);
                 sshExecutor.setUser(commonUser);
                 sshExecutor.setPassword(commonPassword);
                 executorService.submit(sshExecutor);
+                processes.add(sshExecutor);
             }
             try {
                 sharedCounter.await(waitTimeout, TimeUnit.MINUTES);
             } catch (InterruptedException e) {
                 logger.warn("Operation timed out");
             }
+            processes.stream().filter(executor -> !executor.hasCompleted()).forEach(executor -> {
+                logger.warn("[[" + executor.getHost() + "]] Node still running. Its output will not be complete.");
+            });
+            processes.clear();
         }
         /*
          * Execute the master job
          */
         boolean isMosaic = "Mosaic".equals(masterGraph.getNode(0).getOperator());
         if (isMosaic) {
-            Files.write(masterSharedFolder.resolve("masterGraph.xml"), masterGraph.getNode(0).parametersToString().getBytes());
+            Files.write(masterLocalFolder.resolve("masterGraph.xml"), masterGraph.getNode(0).parametersToString().getBytes());
         } else {
-            Files.write(masterSharedFolder.resolve("masterGraph.xml"), masterGraph.toString().getBytes());
+            Files.write(masterLocalFolder.resolve("masterGraph.xml"), masterGraph.toString().getBytes());
         }
         outFiles = outFiles.stream()
-                           .map(name -> masterSharedFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
+                           .map(name -> masterLocalFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
                            .collect(Collectors.toList());
         String masterCmdLine = templates.get(osSuffix).masterExecCommand
                                         .replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
                                         .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p" : "")
-                                        .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterSharedFolder, osSuffix))
+                                        .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterLocalFolder, osSuffix))
                                         .replace(Constants.PLACEHOLDER_MASTER_INPUT, String.join(" ", outFiles))
                                         .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, osSuffix), osSuffix));
         sharedCounter = new CountDownLatch(1);
@@ -369,7 +422,7 @@ public class S2TbxRemoteExecutor {
         /*
          * Do the cleanup on slaves
          */
-        sharedCounter = new CountDownLatch(nodeNames.size());
+        /*sharedCounter = new CountDownLatch(nodeNames.size());
         for (Map.Entry<String, String> node : nodes.entrySet()) {
             cleanup(node.getKey(), node.getValue(), commonUser, commonPassword, sharedCounter);
         }
@@ -377,7 +430,7 @@ public class S2TbxRemoteExecutor {
             sharedCounter.await(1, TimeUnit.MINUTES);
         } catch (InterruptedException e) {
             logger.warn("Operation timed out");
-        }
+        }*/
 
         executorService.shutdown();
         System.exit(0);
@@ -462,6 +515,17 @@ public class S2TbxRemoteExecutor {
         return Constants.CONST_WINDOWS.equals(os) ?
                 stringPath.replaceAll("/", "\\") :
                 stringPath.replaceAll("\\\\", "/");
+    }
+
+    private static void printCommandLine(CommandLine cmdLine) {
+        for (Option option : cmdLine.getOptions()) {
+            Logger.getRootLogger().info(option.getOpt() + "=" + option.getValue());
+        }
+    }
+
+    private static boolean shouldInsertReadOp(GraphDescriptor graph) {
+        String operator = graph.getNode(0).getOperator();
+        return !("Read".equals(operator) || "Sen2Cor".equals(operator));
     }
 
     private static class CommandTemplate {

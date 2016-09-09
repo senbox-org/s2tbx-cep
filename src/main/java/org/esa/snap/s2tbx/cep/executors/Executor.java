@@ -3,6 +3,8 @@ package org.esa.snap.s2tbx.cep.executors;
 import org.esa.snap.s2tbx.cep.util.Logger;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -20,7 +22,7 @@ public abstract class Executor implements Runnable {
     protected volatile boolean wasCancelled;
     protected List<String> arguments;
     protected Logger.CustomLogger logger;
-    protected int retCode;
+    protected volatile int retCode = Integer.MAX_VALUE;
     protected boolean asSuperUser;
     protected CountDownLatch counter;
 
@@ -67,6 +69,8 @@ public abstract class Executor implements Runnable {
      */
     public int getReturnCode() { return this.retCode; }
 
+    public String getHost() { return this.host; }
+
     /**
      * Signals the stop of the execution.
      */
@@ -81,6 +85,8 @@ public abstract class Executor implements Runnable {
         return this.isStopped;
     }
 
+    public boolean hasCompleted() { return this.retCode != Integer.MAX_VALUE; }
+
     public void setUser(String user) {
         this.user = user;
     }
@@ -91,6 +97,7 @@ public abstract class Executor implements Runnable {
 
     @Override
     public void run() {
+        Instant start = Instant.now();
         try {
             retCode = execute(null, true);
             logger.info("[[%s]] completed %s", host, retCode == 0 ? "OK" : "NOK (code " + String.valueOf(retCode) + ")");
@@ -99,7 +106,16 @@ public abstract class Executor implements Runnable {
                 logger.info(String.format("Active nodes: %s", this.counter.getCount()));
             }
         } catch (Exception e) {
+            retCode = -255;
             logger.error("[[%s]] produced an error: %s", host, e.getMessage());
+        } finally {
+            Instant end = Instant.now();
+            long seconds = Duration.between(start, end).getSeconds();
+            long hours = seconds / 3600;
+            seconds -= hours * 3600;
+            long minutes = seconds / 60;
+            seconds -= minutes * 60;
+            logger.info(String.format("[[%s]] Execution took %02dh%02dm%02ds", host, hours, minutes, seconds));
         }
     }
 
