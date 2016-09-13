@@ -4,6 +4,7 @@ import org.apache.commons.cli.*;
 import org.esa.snap.s2tbx.cep.executors.Executor;
 import org.esa.snap.s2tbx.cep.executors.ExecutorType;
 import org.esa.snap.s2tbx.cep.util.GraphDescriptor;
+import org.esa.snap.s2tbx.cep.util.GraphNode;
 import org.esa.snap.s2tbx.cep.util.Logger;
 import org.esa.snap.s2tbx.cep.util.Utilities;
 
@@ -213,28 +214,42 @@ public class S2TbxRemoteExecutor {
             String key = keys.nextElement().toString().toLowerCase();
             /*if (key.startsWith(Constants.KEY_SLAVE_NODE_PREFIX)) {
                 nodes.put(props.getProperty(key), key.substring(key.lastIndexOf(".") + 1));
-            } else */if (key.equals(Constants.SLAVE_COMMAND_LINE_TEMPLATE_LINUX)) {
-                templates.get(Constants.CONST_LINUX).slaveExecCommand = props.getProperty(key);
-            } else if (key.equals(Constants.SLAVE_COMMAND_LINE_TEMPLATE_WINDOWS)) {
-                templates.get(Constants.CONST_WINDOWS).slaveExecCommand = props.getProperty(key);
-            } else if (key.equals(Constants.MASTER_COMMAND_LINE_TEMPLATE_LINUX)) {
-                templates.get(Constants.CONST_LINUX).masterExecCommand = props.getProperty(key);
-            } else if (key.equals(Constants.MASTER_COMMAND_LINE_TEMPLATE_WINDOWS)) {
-                templates.get(Constants.CONST_WINDOWS).masterExecCommand = props.getProperty(key);
-            } else if (key.equals(Constants.MASTER_GPT_PATH_LINUX)) {
-                templates.get(Constants.CONST_LINUX).masterGptCommand = props.getProperty(key);
-            } else if (key.equals(Constants.MASTER_GPT_PATH_WINDOWS)) {
-                templates.get(Constants.CONST_WINDOWS).masterGptCommand = props.getProperty(key);
-            } else if (key.equals(Constants.SLAVE_GPT_PATH_LINUX)) {
-                templates.get(Constants.CONST_LINUX).slaveGptCommand = props.getProperty(key);
-            } else if (key.equals(Constants.SLAVE_GPT_PATH_WINDOWS)) {
-                templates.get(Constants.CONST_WINDOWS).slaveGptCommand = props.getProperty(key);
-            } else if (key.equals(Constants.SLAVE_USERNAME)) {
-                commonUser = props.getProperty(key);
-            } else if (key.equals(Constants.SLAVE_PASSWORD)) {
-                commonPassword = props.getProperty(key);
+            } else */
+            switch (key) {
+                case Constants.SLAVE_COMMAND_LINE_TEMPLATE_LINUX:
+                    templates.get(Constants.CONST_LINUX).slaveExecCommand = props.getProperty(key);
+                    break;
+                case Constants.SLAVE_COMMAND_LINE_TEMPLATE_WINDOWS:
+                    templates.get(Constants.CONST_WINDOWS).slaveExecCommand = props.getProperty(key);
+                    break;
+                case Constants.MASTER_COMMAND_LINE_TEMPLATE_LINUX:
+                    templates.get(Constants.CONST_LINUX).masterExecCommand = props.getProperty(key);
+                    break;
+                case Constants.MASTER_COMMAND_LINE_TEMPLATE_WINDOWS:
+                    templates.get(Constants.CONST_WINDOWS).masterExecCommand = props.getProperty(key);
+                    break;
+                case Constants.MASTER_GPT_PATH_LINUX:
+                    templates.get(Constants.CONST_LINUX).masterGptCommand = props.getProperty(key);
+                    break;
+                case Constants.MASTER_GPT_PATH_WINDOWS:
+                    templates.get(Constants.CONST_WINDOWS).masterGptCommand = props.getProperty(key);
+                    break;
+                case Constants.SLAVE_GPT_PATH_LINUX:
+                    templates.get(Constants.CONST_LINUX).slaveGptCommand = props.getProperty(key);
+                    break;
+                case Constants.SLAVE_GPT_PATH_WINDOWS:
+                    templates.get(Constants.CONST_WINDOWS).slaveGptCommand = props.getProperty(key);
+                    break;
+                case Constants.SLAVE_USERNAME:
+                    commonUser = props.getProperty(key);
+                    break;
+                case Constants.SLAVE_PASSWORD:
+                    commonPassword = props.getProperty(key);
+                    break;
             }
         }
+        final String user = commonUser;
+        final String password = commonPassword;
         masterLocalFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_MASTER_FOLDER));
         masterSharedFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_MASTER_SHARE));
         slaveMountFolder = Paths.get(commandLine.getOptionValue(Constants.PARAM_SHARE_MOUNT));
@@ -322,7 +337,7 @@ public class S2TbxRemoteExecutor {
         /*
          * Check that the shared folder is mount on slaves
          */
-        CountDownLatch sharedCounter = null;
+        CountDownLatch sharedCounter;
         /*CountDownLatch sharedCounter = new CountDownLatch(nodeNames.size());
         for (Map.Entry<String, String> node : nodes.entrySet()) {
             checkPrerequisites(node.getKey(), node.getValue(), commonUser, commonPassword, sharedCounter);
@@ -336,33 +351,42 @@ public class S2TbxRemoteExecutor {
          * Create job arguments for slaves
          */
 
+        int counter = 0;
+        GraphNode firstNode = slaveGraph.getNode(0);
+        boolean isSen2CorOrThree = "Sen2Cor".equals(firstNode.getOperator()) ||
+                "Sen2Three".equals(masterGraph.getNode(0).getOperator());
         for (Path inputFile : inputFiles) {
             try {
+                counter++;
                 String node = nodeNames.get(nodeIndex);
                 String nodeOS = nodes.get(node);
-                String outFile = resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(nodeIndex + 1) + ".tif").toString();
-                final String transformedCmdLine = String.format(
-                        templates.get(nodeOS).slaveExecCommand
+                String outFile = resolve(outputFolder, nodeOS).resolve("result_" + String.valueOf(counter) + ".tif").toString();
+                String transformedCmdLine = templates.get(nodeOS).slaveExecCommand;
+                if (isSen2CorOrThree) {
+                    transformedCmdLine = transformedCmdLine.replace(Constants.SLAVE_CMD_OUTPUT_SECTION, "");
+                }
+                transformedCmdLine= String.format(transformedCmdLine
                                 .replace(Constants.PLACEHOLDER_GPT, templates.get(nodeOS).slaveGptCommand)
                                 .replace(Constants.PLACEHOLDER_SHARED_FOLDER, normalizePath(slaveMountFolder, nodeOS))
                                 .replace(Constants.PLACEHOLDER_INPUT_FILE, outFile)
                                 .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(resolve(inputFolder, nodeOS), nodeOS))
                                 .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, nodeOS), nodeOS)),
-                        String.valueOf(nodeIndex + 1),
+                        String.valueOf(counter),
                         normalizePath(inputFile, nodeOS),
-                        "result_" + String.valueOf(nodeIndex + 1));
+                        "result_" + String.valueOf(counter));
                 if (shouldInsertReadOp(slaveGraph)) {
                     slaveGraph.insertNode(0, "Read", "\"-Pfile=" + normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS) + "\"");
                 } else {
-                    if ("Read".equals(slaveGraph.getNode(0).getOperator())) {
-                        slaveGraph.getNode(0).setArgument("file", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
-                    } else if ("Sen2Cor".equals(slaveGraph.getNode(0).getOperator())) {
-                        slaveGraph.getNode(0).setArgument("sourceFolder", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
+                    if ("Read".equals(firstNode.getOperator())) {
+                        firstNode.setArgument("file", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
+                    } else if ("Sen2Cor".equals(firstNode.getOperator())) {
+                        firstNode.setArgument("sourceFolder", normalizePath(resolve(inputFolder, nodeOS).resolve(inputFile), nodeOS));
                     }
                 }
-                Files.write(masterLocalFolder.resolve("slaveGraph" + String.valueOf(nodeIndex + 1) + ".xml"), slaveGraph.toString().getBytes());
+                Files.write(masterLocalFolder.resolve("slaveGraph" + String.valueOf(counter) + ".xml"), slaveGraph.toString().getBytes());
+                String finalTransformedCmdLine = transformedCmdLine;
                 jobArguments.put(node, new ArrayList<String>() {{
-                    add(transformedCmdLine);
+                    add(finalTransformedCmdLine);
                 }});
                 outFiles.add(outFile);
                 nodeIndex = (nodeIndex == nodes.size() - 1) ? 0 : nodeIndex + 1;
@@ -389,29 +413,43 @@ public class S2TbxRemoteExecutor {
             } catch (InterruptedException e) {
                 logger.warn("Operation timed out");
             }
-            processes.stream().filter(executor -> !executor.hasCompleted()).forEach(executor -> {
-                logger.warn("[[" + executor.getHost() + "]] Node still running. Its output will not be complete.");
-            });
+            processes.stream()
+                     .filter(executor -> !executor.hasCompleted())
+                     .forEach(executor ->
+                             logger.warn("[[" + executor.getHost() + "]] Node still running. Its output will not be complete."));
             processes.clear();
         }
         /*
          * Execute the master job
          */
         boolean isMosaic = "Mosaic".equals(masterGraph.getNode(0).getOperator());
+        isSen2CorOrThree = "Sen2Cor".equals(masterGraph.getNode(0).getOperator()) ||
+                                "Sen2Three".equals(masterGraph.getNode(0).getOperator());
         if (isMosaic) {
             Files.write(masterLocalFolder.resolve("masterGraph.xml"), masterGraph.getNode(0).parametersToString().getBytes());
         } else {
+            if (isSen2CorOrThree) {
+                masterGraph.getNode(0).setArgument("sourceFolder", normalizePath(resolve(inputFolder, osSuffix), osSuffix));
+            }
             Files.write(masterLocalFolder.resolve("masterGraph.xml"), masterGraph.toString().getBytes());
         }
-        outFiles = outFiles.stream()
-                           .map(name -> masterLocalFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
-                           .collect(Collectors.toList());
-        String masterCmdLine = templates.get(osSuffix).masterExecCommand
-                                        .replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
-                                        .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p" : "")
-                                        .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterLocalFolder, osSuffix))
-                                        .replace(Constants.PLACEHOLDER_MASTER_INPUT, String.join(" ", outFiles))
-                                        .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, normalizePath(resolve(outputFolder, osSuffix), osSuffix));
+        if (outFiles.size() > 0) {
+            outFiles = outFiles.stream()
+                    .map(name -> masterLocalFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
+                    .collect(Collectors.toList());
+            outFiles.forEach(f -> ensurePermissions(osSuffix, f, user, password));
+        } else {
+            ensurePermissions(osSuffix, masterLocalFolder, user, password);
+        }
+        String masterCmdLine = templates.get(osSuffix).masterExecCommand;
+        if (isSen2CorOrThree) {
+            masterCmdLine = masterCmdLine.replace(Constants.MASTER_CMD_OUTPUT_SECTION, "");
+        }
+        masterCmdLine = masterCmdLine.replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
+                                     .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p " : "")
+                                     .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterLocalFolder, osSuffix))
+                                     .replace(Constants.PLACEHOLDER_MASTER_INPUT, !isSen2CorOrThree ? String.join(" ", outFiles) : "")
+                                     .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, !isSen2CorOrThree ? normalizePath(resolve(outputFolder, osSuffix), osSuffix) : "");
         sharedCounter = new CountDownLatch(1);
         executorService.submit(Executor.create(ExecutorType.PROCESS, "master", Arrays.asList(masterCmdLine.split(" ")), sharedCounter));
         try {
@@ -436,6 +474,28 @@ public class S2TbxRemoteExecutor {
         System.exit(0);
     }
 
+    private static void ensurePermissions(String nodeType, Path path, String usr, String pwd) {
+        Executor executor = Executor.create(ExecutorType.SSH2,
+                "master",
+                new ArrayList<String>() {{
+                    add("chmod");
+                    if (Files.isDirectory(path)) {
+                        add("-R");
+                    }
+                    add("0777");
+                    add(normalizePath(path, nodeType));
+                }},
+                true,
+                null);
+        executor.setUser(usr);
+        executor.setPassword(pwd);
+        executorService.submit(executor);
+    }
+
+    private static void ensurePermissions(String nodeType, String path, String usr, String pwd) {
+        ensurePermissions(nodeType, Paths.get(path), usr, pwd);
+    }
+
     private static void checkPrerequisites(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
         Executor executor = Executor.create(ExecutorType.SSH2,
                 nodeName,
@@ -444,7 +504,7 @@ public class S2TbxRemoteExecutor {
                     add(normalizePath(slaveMountFolder, nodeType));
                     add(Constants.SHELL_COMMAND_SEPARATOR);
                     add("chmod");
-                    add("777");
+                    add("0777");
                     add(normalizePath(slaveMountFolder, nodeType));
                     add(Constants.SHELL_COMMAND_SEPARATOR);
                     add("mount.cifs");

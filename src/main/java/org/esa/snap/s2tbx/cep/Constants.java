@@ -40,8 +40,10 @@ public class Constants {
     public static final String PLACEHOLDER_SHARED_FOLDER = "$smf";
     public static final String PLACEHOLDER_OUTPUT_FOLDER = "$out";
     public static final String PLACEHOLDER_MASTER_INPUT = "$files";
-    public static final String PLACEHOLDER_MASTER_OPT = "$opt";
+    public static final String PLACEHOLDER_MASTER_OPT = "$opt ";
     public static final String CONST_WINDOWS = "windows";
     public static final String CONST_LINUX = "linux";
     public static final String SHELL_COMMAND_SEPARATOR = ";";
+    public static final String MASTER_CMD_OUTPUT_SECTION = " -f GeoTIFF-BigTIFF -t $out/master.tif";
+    public static final String SLAVE_CMD_OUTPUT_SECTION = " -f GeoTIFF-BigTIFF -t $out/%s.tif";
 }
