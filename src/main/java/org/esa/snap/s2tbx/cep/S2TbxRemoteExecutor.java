@@ -1,11 +1,6 @@
 package org.esa.snap.s2tbx.cep;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
+import org.apache.commons.cli.*;
 import org.esa.snap.s2tbx.cep.executors.Executor;
 import org.esa.snap.s2tbx.cep.executors.ExecutorType;
 import org.esa.snap.s2tbx.cep.graph.GraphDescriptor;
@@ -20,17 +15,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -60,6 +45,9 @@ import java.util.stream.Collectors;
  *                                  PARAMETER['false_easting', 500000.0], PARAMETER['false_northing', 0.0], UNIT['m', 1.0], AXIS['Easting', EAST], AXIS['Northing', NORTH],
  *                                  AUTHORITY['EPSG','32632']]"}
  *          -s s2tb-cep-01:linux,s2tb-cep-02:linux
+ *          -t 32TMK
+ *          -startdate 2017-07-01
+ *          -enddate 2017-07-05
  *
  * @author Cosmin Cara
  */
@@ -74,8 +62,8 @@ public class S2TbxRemoteExecutor {
 
     static {
         options = new Options();
-        /**
-         * Nodes configuration parameters
+        /*
+          Nodes configuration parameters
          */
         options.addOption(Option.builder(Constants.PARAM_SHARE_MOUNT)
                 .longOpt("slavemountfolder")
@@ -126,8 +114,8 @@ public class S2TbxRemoteExecutor {
                   .hasArg()
                   .required()
                   .build());
-        /**
-         * Downloader configuration parameters
+        /*
+          Downloader configuration parameters
          */
         options.addOption(Option.builder(Constants.PARAM_INPUT)
                 .longOpt("input")
@@ -171,8 +159,8 @@ public class S2TbxRemoteExecutor {
                   .hasArg(false)
                   .optionalArg(true)
                   .build());
-        /**
-         * Execution parameters
+        /*
+          Execution parameters
          */
         options.addOption(Option.builder(Constants.PARAM_INPUT_LOOKFOR_FOLDERS)
                 .longOpt("folders")
@@ -320,7 +308,7 @@ public class S2TbxRemoteExecutor {
                                         "--preops",
                                         "--s2pt", useL1c ? "S2MSI1C" : "S2MSI2Ap" };
 
-        ro.cs.products.Executor.execute(args);
+        ro.cs.products.Executor.execute(cmdLine);
 
         logger.info(String.format("Scanning %s", Constants.CONST_WINDOWS.equals(osSuffix) ?
                 masterSharedFolder.resolve(inputFolder) :

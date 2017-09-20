@@ -18,6 +18,11 @@
 
     <repositories>
         <repository>
+            <id>in-project</id>
+            <name>In Project Repository</name>
+            <url>file://${project.basedir}/src/main/resources/dependencies</url>
+        </repository>
+        <repository>
             <id>java.net-Public</id>
             <name>Maven Java Net Snapshots and Releases</name>
             <url>https://maven.java.net/content/groups/public/</url>
@@ -26,11 +31,7 @@
             <id>maven2</id>
             <url>http://central.maven.org/maven2</url>
         </repository>
-        <repository>
-            <id>in-project</id>
-            <name>In Project Repository</name>
-            <url>file://${project.build.directory}/dependencies</url>
-        </repository>
+
     </repositories>
 
     <dependencies>
