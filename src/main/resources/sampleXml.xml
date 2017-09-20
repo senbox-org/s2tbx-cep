@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<execution>
+	<config>
+		<master>
+			<localFolder>/home/user/tmp</localFolder>
+			<share>/mnt/share</share>
+			<waitTime>15</waitTime>
+		</master>
+		<slave>
+			<user>user</user>
+			<password>password</password>
+			<shareMount>/mnt/share</shareMount>
+			<inputFolder>in</inputFolder>
+			<outputFolder>out</outputFolder>
+			<nodes>
+				<name>slave1.domain</name>
+				<name>slave2.domain</name>
+			</nodes>
+		</slave>
+	</config>
+	<search>
+		<startDate>2017-07-01</startDate>
+		<endDate>2017-07-10</endDate>
+		<tiles>32TMK</tiles>
+		<productType>L1C</productType>
+		<lookForFolders>false</lookForFolders>
+	</search>
+</execution>
