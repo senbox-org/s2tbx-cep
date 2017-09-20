@@ -24,14 +24,14 @@ public class Constants {
     public static final int DEFAULT_TIMEOUT = 15;
     public static final String DEFAULT_PERMISSIONS = "rwxr-xr-x";
     public static final String KEY_SLAVE_NODE_PREFIX = "slave.node";
-    public static final String SLAVE_COMMAND_LINE_TEMPLATE_LINUX = "slave.command.line.template.linux";
-    public static final String SLAVE_COMMAND_LINE_TEMPLATE_WINDOWS = "slave.command.line.template.windows";
-    public static final String MASTER_COMMAND_LINE_TEMPLATE_LINUX = "master.command.line.template.linux";
-    public static final String MASTER_COMMAND_LINE_TEMPLATE_WINDOWS = "master.command.line.template.windows";
-    public static final String MASTER_GPT_PATH_LINUX = "master.gpt.path.linux";
-    public static final String MASTER_GPT_PATH_WINDOWS = "master.gpt.path.windows";
-    public static final String SLAVE_GPT_PATH_LINUX = "slave.gpt.path.linux";
-    public static final String SLAVE_GPT_PATH_WINDOWS = "slave.gpt.path.windows";
+    public static final String SLAVE_COMMAND_LINE_TEMPLATE_LINUX = "linux.slave.command.line.template";
+    public static final String SLAVE_COMMAND_LINE_TEMPLATE_WINDOWS = "windows.slave.command.line.template";
+    public static final String MASTER_COMMAND_LINE_TEMPLATE_LINUX = "linux.master.command.line.template";
+    public static final String MASTER_COMMAND_LINE_TEMPLATE_WINDOWS = "windows.master.command.line.template";
+    public static final String MASTER_GPT_PATH_LINUX = "linux.master.gpt.path";
+    public static final String MASTER_GPT_PATH_WINDOWS = "windows.master.gpt.path";
+    public static final String SLAVE_GPT_PATH_LINUX = "linux.slave.gpt.path";
+    public static final String SLAVE_GPT_PATH_WINDOWS = "windows.slave.gpt.path";
     public static final String SLAVE_USERNAME = "slave.username";
     public static final String SLAVE_PASSWORD = "slave.password";
     public static final String PLACEHOLDER_GPT = "$gpt";
@@ -46,4 +46,7 @@ public class Constants {
     public static final String SHELL_COMMAND_SEPARATOR = ";";
     public static final String MASTER_CMD_OUTPUT_SECTION = " -f GeoTIFF-BigTIFF -t $out/master.tif";
     public static final String SLAVE_CMD_OUTPUT_SECTION = " -f GeoTIFF-BigTIFF -t $out/%s.tif";
+    public static final String PARAM_TILES = "tiles";
+    public static final String PARAM_START_DATE = "startdate";
+    public static final String PARAM_END_DATE = "enddate";
 }

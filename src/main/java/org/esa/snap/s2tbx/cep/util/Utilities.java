@@ -3,9 +3,24 @@ package org.esa.snap.s2tbx.cep.util;
 import org.esa.snap.s2tbx.cep.Constants;
 
 import java.io.IOException;
-import java.nio.file.*;
-import java.nio.file.attribute.*;
-import java.util.*;
+import java.nio.file.FileStore;
+import java.nio.file.FileSystem;
+import java.nio.file.FileSystems;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.FileVisitor;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileAttribute;
+import java.nio.file.attribute.PosixFileAttributeView;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -56,17 +71,29 @@ public class Utilities {
     }
 
     /**
-     * Finds first file of the given extension in the given folder (not recursive).
+     * Finds first file of the given pattern in the given folder (not recursive).
      *
      * @param folder        The folder in which to search
      * @param regEx         The file name pattern
      *
      * @throws IOException
      */
-    public static Optional<Path> findFirst(Path folder, String regEx) throws IOException {
+    public static Optional<Path> findFirst(Path folder, Pattern... regEx) throws IOException {
         List<Path> files = listFiles(folder, 1);
-        Pattern pattern = Pattern.compile(regEx);
-        return files.stream().filter(p -> pattern.matcher(p.toString()).matches()).findFirst();
+        Optional<Path> found = Optional.empty();
+        if (regEx == null || regEx.length == 0) {
+            if (files.size() > 0) {
+                found = Optional.of(files.get(0));
+            }
+        } else {
+            for (Pattern pattern : regEx) {
+                found = files.stream().filter(p -> pattern.matcher(p.toString()).matches()).findFirst();
+                if (found.isPresent()) {
+                    break;
+                }
+            }
+        }
+        return found;
     }
 
     /**

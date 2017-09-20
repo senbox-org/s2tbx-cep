@@ -1,7 +1,11 @@
 package org.esa.snap.s2tbx.cep.util;
 
 import java.io.IOException;
-import java.util.logging.*;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.FileHandler;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
 
 /**
  * Simple logger class.
@@ -11,6 +15,7 @@ import java.util.logging.*;
 public class Logger {
 
     public interface CustomLogger {
+        void debug(String message, Object...args);
         void info(String message, Object...args);
         void warn(String message, Object...args);
         void error(String message, Object...args);
@@ -19,6 +24,9 @@ public class Logger {
     private static final java.util.logging.Logger logger;
     private static String rootLogFile;
     private static CustomLogger rootLogger = new CustomLogger() {
+        @Override
+        public void debug(String message, Object... args) { fine(message, args); }
+
         @Override
         public void info(String message, Object... args) {
             information(message, args);
@@ -65,6 +73,13 @@ public class Logger {
         return fileHandler;
     }
 
+    private static void fine(String message, Object...args) {
+        if (args != null && args.length > 0) {
+            message = String.format(message, args);
+        }
+        logger.fine(message);
+    }
+
     private static void information(String message, Object...args) {
         if (args != null && args.length > 0) {
             message = String.format(message, args);
@@ -94,6 +109,14 @@ public class Logger {
             //fileHandler = registerHandler(logFile);
             fileHandler = new FileHandler(logFile);
             fileHandler.setFormatter(new LogFormatter());
+        }
+
+        @Override
+        public void debug(String message, Object...args) {
+            if (args != null && args.length > 0) {
+                message = String.format(message, args);
+            }
+            fileHandler.publish(new LogRecord(Level.FINE, message));
         }
 
         @Override

@@ -1,4 +1,6 @@
-package org.esa.snap.s2tbx.cep.util;
+package org.esa.snap.s2tbx.cep.graph;
+
+import org.esa.snap.s2tbx.cep.util.XmlConstants;
 
 import java.util.ArrayList;
 import java.util.List;

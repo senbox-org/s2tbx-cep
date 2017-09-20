@@ -1,6 +1,12 @@
-package org.esa.snap.s2tbx.cep.util;
+package org.esa.snap.s2tbx.cep.graph;
 
-import java.util.*;
+import org.esa.snap.s2tbx.cep.util.XmlConstants;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Created by kraftek on 9/6/2016.

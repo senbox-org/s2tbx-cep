@@ -1,11 +1,17 @@
 package org.esa.snap.s2tbx.cep;
 
-import org.apache.commons.cli.*;
+import org.apache.commons.cli.CommandLine;
+import org.apache.commons.cli.CommandLineParser;
+import org.apache.commons.cli.DefaultParser;
+import org.apache.commons.cli.HelpFormatter;
+import org.apache.commons.cli.Option;
+import org.apache.commons.cli.Options;
 import org.esa.snap.s2tbx.cep.executors.Executor;
 import org.esa.snap.s2tbx.cep.executors.ExecutorType;
-import org.esa.snap.s2tbx.cep.util.GraphDescriptor;
-import org.esa.snap.s2tbx.cep.util.GraphNode;
+import org.esa.snap.s2tbx.cep.graph.GraphDescriptor;
+import org.esa.snap.s2tbx.cep.graph.GraphNode;
 import org.esa.snap.s2tbx.cep.util.Logger;
+import org.esa.snap.s2tbx.cep.util.Sentinel2NameHelper;
 import org.esa.snap.s2tbx.cep.util.Utilities;
 
 import java.io.File;
@@ -14,12 +20,21 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Enumeration;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 /**
@@ -56,13 +71,12 @@ public class S2TbxRemoteExecutor {
     private static Path masterSharedFolder;
     private static Path slaveMountFolder;
     private static final ExecutorService executorService;
-    private static final String l1cMetadataPattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L1C_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
-    private static final String l2aMetadataPattern = ".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L2A_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).(xml|XML)";
-    private static final Pattern l1cFolderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L1C_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
-    private static final Pattern l2aFolderPattern = Pattern.compile(".*(S2A|S2B|S2_)_([A-Z|0-9]{4})_([A-Z|0-9|_]{4})([A-Z|0-9]{3})L2A_([A-Z|0-9|_]{4})_([0-9]{8}T[0-9]{6})([A-Z|0-9|_]+).SAFE");
 
     static {
         options = new Options();
+        /**
+         * Nodes configuration parameters
+         */
         options.addOption(Option.builder(Constants.PARAM_SHARE_MOUNT)
                 .longOpt("slavemountfolder")
                 .argName("slave.mount.folder")
@@ -84,6 +98,37 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .required()
                 .build());
+        options.addOption(Option.builder(Constants.PARAM_OUTPUT)
+                  .longOpt("output")
+                  .argName("output.folder")
+                  .desc("The folder (relative to the common shared folder) in which the processed products are to be placed")
+                  .hasArg()
+                  .required()
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_USER)
+                  .longOpt("user")
+                  .argName("user")
+                  .desc("The user name used to connect to remote slave nodes")
+                  .hasArg()
+                  .optionalArg(true)
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_PASSWORD)
+                  .longOpt("password")
+                  .argName("password")
+                  .desc("The password of the user used to connect to remote slave nodes")
+                  .hasArg()
+                  .optionalArg(true)
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_SLAVES)
+                  .longOpt("slaves")
+                  .argName("slave.nodes")
+                  .desc("The names or IPs of the slave nodes. Expected format: nodename1:<windows|linux>,nodename2:<windows|linux>,...")
+                  .hasArg()
+                  .required()
+                  .build());
+        /**
+         * Downloader configuration parameters
+         */
         options.addOption(Option.builder(Constants.PARAM_INPUT)
                 .longOpt("input")
                 .argName("input.folder")
@@ -91,19 +136,50 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .required()
                 .build());
+        options.addOption(Option.builder(Constants.PARAM_TILES)
+                  .longOpt("tiles")
+                  .argName("tileId1 tileId2 ...")
+                  .desc("A list of Sentinel-2 tile IDs, space-separated")
+                  .hasArgs()
+                  .required()
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_START_DATE)
+                  .longOpt("startdate")
+                  .argName("yyyy-MM-dd")
+                  .desc("The acquisition start date")
+                  .hasArg()
+                  .required()
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_END_DATE)
+                  .longOpt("enddate")
+                  .argName("yyyy-MM-dd")
+                  .desc("The acquisition end date")
+                  .hasArg()
+                  .required()
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_USE_L1C)
+                  .longOpt("l1c")
+                  .argName("l1c")
+                  .desc("Looks for L1C products")
+                  .hasArg(false)
+                  .optionalArg(true)
+                  .build());
+        options.addOption(Option.builder(Constants.PARAM_USE_L2A)
+                  .longOpt("l2a")
+                  .argName("l2a")
+                  .desc("Looks for L2A products")
+                  .hasArg(false)
+                  .optionalArg(true)
+                  .build());
+        /**
+         * Execution parameters
+         */
         options.addOption(Option.builder(Constants.PARAM_INPUT_LOOKFOR_FOLDERS)
                 .longOpt("folders")
                 .argName("look.for.folders")
                 .desc("Looks for folders to pass to the first operator, instead of metadata files")
                 .hasArg(false)
                 .optionalArg(true)
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_OUTPUT)
-                .longOpt("output")
-                .argName("output.folder")
-                .desc("The folder (relative to the common shared folder) in which the processed products are to be placed")
-                .hasArg()
-                .required()
                 .build());
         options.addOption(Option.builder(Constants.PARAM_SLAVE_OPERATORS)
                 .longOpt("slaveOps")
@@ -126,45 +202,10 @@ public class S2TbxRemoteExecutor {
                 .hasArg()
                 .optionalArg(true)
                 .build());
-        options.addOption(Option.builder(Constants.PARAM_USER)
-                .longOpt("user")
-                .argName("user")
-                .desc("The user name used to connect to remote slave nodes")
-                .hasArg()
-                .optionalArg(true)
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_PASSWORD)
-                .longOpt("password")
-                .argName("password")
-                .desc("The password of the user used to connect to remote slave nodes")
-                .hasArg()
-                .optionalArg(true)
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_SLAVES)
-                .longOpt("slaves")
-                .argName("slave.nodes")
-                .desc("The names or IPs of the slave nodes. Expected format: nodename1:<windows|linux>,nodename2:<windows|linux>,...")
-                .hasArg()
-                .required()
-                .build());
         options.addOption(Option.builder(Constants.PARAM_RESUME_MASTER)
                 .longOpt("resume")
                 .argName("resume.master")
                 .desc("Resumes the execution for the master node only")
-                .hasArg(false)
-                .optionalArg(true)
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_USE_L1C)
-                .longOpt("l1c")
-                .argName("l1c")
-                .desc("Looks for L1C products")
-                .hasArg(false)
-                .optionalArg(true)
-                .build());
-        options.addOption(Option.builder(Constants.PARAM_USE_L2A)
-                .longOpt("l2a")
-                .argName("l2a")
-                .desc("Looks for L2A products")
                 .hasArg(false)
                 .optionalArg(true)
                 .build());
@@ -259,6 +300,28 @@ public class S2TbxRemoteExecutor {
         boolean useL1c = commandLine.hasOption(Constants.PARAM_USE_L1C);
         boolean useL2a = commandLine.hasOption(Constants.PARAM_USE_L2A);
         boolean lookForFolders = commandLine.hasOption(Constants.PARAM_INPUT_LOOKFOR_FOLDERS);
+
+        String startDate = commandLine.getOptionValue(Constants.PARAM_START_DATE);
+        String endDate = commandLine.getOptionValue(Constants.PARAM_END_DATE);
+        String[] tiles = commandLine.getOptionValues(Constants.PARAM_TILES);
+
+        logger.info(String.format("Searching for Sentinel-2 %s products between %s and %s, containing tiles %s",
+                                  useL1c ? "L1C" : "L2A",
+                                  startDate,
+                                  endDate,
+                                  String.join(",", tiles)));
+        String[] cmdLine = new String[] { "--out", inputFolder,
+                                        "--tiles", String.join(" ", tiles),
+                                        "--startdate", startDate,
+                                        "--enddate", endDate,
+                                        "--aws",
+                                        "--store", "AWS",
+                                        "--mode", "RESUME",
+                                        "--preops",
+                                        "--s2pt", useL1c ? "S2MSI1C" : "S2MSI2Ap" };
+
+        ro.cs.products.Executor.execute(args);
+
         logger.info(String.format("Scanning %s", Constants.CONST_WINDOWS.equals(osSuffix) ?
                 masterSharedFolder.resolve(inputFolder) :
                 slaveMountFolder.resolve(inputFolder)));
@@ -272,16 +335,16 @@ public class S2TbxRemoteExecutor {
             Optional<Path> inputFile = Optional.empty();
             if (!lookForFolders) {
                 if (useL1c) {
-                    inputFile = Utilities.findFirst(productFolder, l1cMetadataPattern);
+                    inputFile = Utilities.findFirst(productFolder, Sentinel2NameHelper.getL1CMetadataPatterns());
                 }
                 if (useL2a) {
-                    inputFile = Utilities.findFirst(productFolder, l2aMetadataPattern);
+                    inputFile = Utilities.findFirst(productFolder, Sentinel2NameHelper.getL2AMetadataPatterns());
                 }
             } else {
-                if (useL1c && l1cFolderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
+                if (useL1c && Sentinel2NameHelper.isL1C(productFolder.toAbsolutePath().toString())) {
                     inputFile = Optional.of(productFolder);
                 }
-                if (useL2a && l2aFolderPattern.matcher(productFolder.toAbsolutePath().toString()).matches()) {
+                if (useL2a && Sentinel2NameHelper.isL2A(productFolder.toAbsolutePath().toString())) {
                     inputFile = Optional.of(productFolder);
                 }
             }

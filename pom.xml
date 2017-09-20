@@ -26,6 +26,11 @@
             <id>maven2</id>
             <url>http://central.maven.org/maven2</url>
         </repository>
+        <repository>
+            <id>in-project</id>
+            <name>In Project Repository</name>
+            <url>file://${project.build.directory}/dependencies</url>
+        </repository>
     </repositories>
 
     <dependencies>
@@ -43,6 +48,11 @@
             <groupId>com.jcraft</groupId>
             <artifactId>jsch</artifactId>
             <version>0.1.53</version>
+        </dependency>
+        <dependency>
+            <groupId>ro.cs.products</groupId>
+            <artifactId>ProductDownload</artifactId>
+            <version>1.7</version>
         </dependency>
     </dependencies>
 
