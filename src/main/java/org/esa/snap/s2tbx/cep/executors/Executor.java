@@ -100,14 +100,14 @@ public abstract class Executor implements Runnable {
         Instant start = Instant.now();
         try {
             retCode = execute(null, true);
-            logger.info("[[%s]] completed %s", host, retCode == 0 ? "OK" : "NOK (code " + String.valueOf(retCode) + ")");
+            logger.info("[%s] completed %s", host, retCode == 0 ? "OK" : "NOK (code " + String.valueOf(retCode) + ")");
             if (this.counter != null) {
                 counter.countDown();
                 logger.info(String.format("Active nodes: %s", this.counter.getCount()));
             }
         } catch (Exception e) {
             retCode = -255;
-            logger.error("[[%s]] produced an error: %s", host, e.getMessage());
+            logger.error("[%s] produced an error: %s", host, e.getMessage());
         } finally {
             Instant end = Instant.now();
             long seconds = Duration.between(start, end).getSeconds();
@@ -115,7 +115,7 @@ public abstract class Executor implements Runnable {
             seconds -= hours * 3600;
             long minutes = seconds / 60;
             seconds -= minutes * 60;
-            logger.info(String.format("[[%s]] Execution took %02dh%02dm%02ds", host, hours, minutes, seconds));
+            logger.info(String.format("[%s] Execution took %02dh%02dm%02ds", host, hours, minutes, seconds));
         }
     }
 

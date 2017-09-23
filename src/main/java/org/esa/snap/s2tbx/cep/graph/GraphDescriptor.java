@@ -4,6 +4,7 @@ import org.esa.snap.s2tbx.cep.util.XmlConstants;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Created by kraftek on 9/6/2016.
@@ -24,8 +25,17 @@ public class GraphDescriptor {
         this.nodes.add(newNode);
     }
 
+    public void addNode(GraphNode node) {
+        this.nodes.add(node);
+    }
+
     public GraphNode getNode(int index) {
         return index >= 0 && index < this.nodes.size() ? this.nodes.get(index) : null;
+    }
+
+    public GraphNode getNode(String identifier) {
+        Optional<GraphNode> node = this.nodes.stream().filter(n -> n.getOperator().equals(identifier)).findFirst();
+        return node.orElse(null);
     }
 
     public int getNodeCount() {

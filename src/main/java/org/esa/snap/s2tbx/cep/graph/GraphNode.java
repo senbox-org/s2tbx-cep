@@ -17,6 +17,11 @@ public class GraphNode {
     private Map<String, Object> parameters;
     private GraphNode previous;
 
+    GraphNode(String operator) {
+        this.operator = operator;
+        this.parameters = new HashMap<>();
+    }
+
     GraphNode(String operator, String arguments, GraphNode previous) {
         this.operator = operator;
         this.parameters = parseArguments(arguments);

@@ -1,9 +1,18 @@
 package org.esa.snap.s2tbx.cep.executors;
 
-import com.jcraft.jsch.*;
+import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelExec;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.JSchException;
+import com.jcraft.jsch.Session;
 import org.esa.snap.s2tbx.cep.Constants;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -58,7 +67,7 @@ public class SSHExecutor extends Executor {
                 }
                 cmdLine = "sudo -S -p '' " + String.join(" ", arguments);
             }
-            logger.info("[[" + host + "]] " + cmdLine);
+            logger.info("[" + host + "] " + cmdLine);
             ((ChannelExec) channel).setCommand(cmdLine);
             channel.setInputStream(null);
             ((ChannelExec) channel).setPty(asSuperUser);
@@ -101,7 +110,7 @@ public class SSHExecutor extends Executor {
             }
             ret = channel.getExitStatus();
         } catch (IOException | JSchException e) {
-            logger.error("[[%s]] failed: %s", host, e.getMessage());
+            logger.error("[%s] failed: %s", host, e.getMessage());
             wasCancelled = true;
             throw e;
         } finally {

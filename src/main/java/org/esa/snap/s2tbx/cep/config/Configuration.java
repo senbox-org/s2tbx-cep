@@ -1,13 +1,10 @@
 package org.esa.snap.s2tbx.cep.config;
 
-import javax.xml.bind.annotation.XmlElement;
 import javax.xml.bind.annotation.XmlRootElement;
 
-@XmlRootElement (name = "config")
+@XmlRootElement (name = "configuration")
 public class Configuration {
-    @XmlElement(name = "slave")
     private Slave slave;
-    @XmlElement(name = "master")
     private Master master;
 
     public Slave getSlave ()

@@ -1,23 +1,18 @@
 package org.esa.snap.s2tbx.cep.config;
 
 import javax.xml.bind.annotation.XmlElement;
-import javax.xml.bind.annotation.XmlList;
+import javax.xml.bind.annotation.XmlElementWrapper;
 import javax.xml.bind.annotation.XmlRootElement;
 import java.util.List;
+import java.util.stream.Collectors;
 
 @XmlRootElement(name = "slave")
 public class Slave {
-    @XmlElement(name = "shareMound")
     private String shareMount;
-    @XmlElement(name = "inputFolder")
     private String inputFolder;
-    @XmlList
-    private List<String> nodes;
-    @XmlElement(name = "outputFolder")
+    private List<Node> nodes;
     private String outputFolder;
-    @XmlElement(name = "user")
     private String user;
-    @XmlElement(name = "password")
     private String password;
 
     public String getShareMount ()
@@ -36,11 +31,13 @@ public class Slave {
     {
         this.inputFolder = inputFolder;
     }
-    public List<String> getNodes ()
+    @XmlElementWrapper(name = "nodes")
+    @XmlElement(name = "node")
+    public List<Node> getNodes ()
     {
         return nodes;
     }
-    public void setNodes (List<String> nodes)
+    public void setNodes (List<Node> nodes)
     {
         this.nodes = nodes;
     }
@@ -69,7 +66,7 @@ public class Slave {
     @Override
     public String toString() {
         return "Slave [shareMount = " + shareMount + ", inputFolder = " + inputFolder + ", nodes = "
-                + String.join(",", nodes) + ", outputFolder = " + outputFolder
+                + String.join(",", nodes.stream().map(Node::getName).collect(Collectors.toList())) + ", outputFolder = " + outputFolder
                 + ", user = " + user + ", password = " + password + "]";
     }
 }

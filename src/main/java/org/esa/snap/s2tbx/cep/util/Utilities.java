@@ -87,7 +87,7 @@ public class Utilities {
             }
         } else {
             for (Pattern pattern : regEx) {
-                found = files.stream().filter(p -> pattern.matcher(p.toString()).matches()).findFirst();
+                found = files.stream().filter(p -> pattern.matcher(p.getName(p.getNameCount() - 1).toString()).matches()).findFirst();
                 if (found.isPresent()) {
                     break;
                 }

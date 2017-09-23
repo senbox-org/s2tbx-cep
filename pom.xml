@@ -20,7 +20,7 @@
         <repository>
             <id>in-project</id>
             <name>In Project Repository</name>
-            <url>file://${project.basedir}/src/main/resources/dependencies</url>
+            <url>file://${project.basedir}/src/main/resources/dependencies/lib</url>
         </repository>
         <repository>
             <id>java.net-Public</id>

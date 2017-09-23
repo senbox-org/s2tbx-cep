@@ -2,19 +2,19 @@
 <execution>
 	<config>
 		<master>
-			<localFolder>/home/user/tmp</localFolder>
+			<localFolder>/home/user/products</localFolder>
 			<share>/mnt/share</share>
-			<waitTime>15</waitTime>
+			<waitTime>5</waitTime>
 		</master>
 		<slave>
-			<user>user</user>
-			<password>password</password>
+			<user>cepadmin</user>
+			<password>abc123.</password>
 			<shareMount>/mnt/share</shareMount>
 			<inputFolder>in</inputFolder>
 			<outputFolder>out</outputFolder>
 			<nodes>
-				<name>slave1.domain</name>
-				<name>slave2.domain</name>
+				<name>slave1.eoscience</name>
+				<name>slave2.eoscience</name>
 			</nodes>
 		</slave>
 	</config>

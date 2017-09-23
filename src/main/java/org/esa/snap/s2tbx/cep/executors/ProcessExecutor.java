@@ -1,6 +1,10 @@
 package org.esa.snap.s2tbx.cep.executors;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.Closeable;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -21,7 +25,7 @@ public class ProcessExecutor extends Executor {
         BufferedReader outReader = null;
         int ret = -1;
         try {
-            logger.info("[[" + host + "]] " + String.join(" ", arguments));
+            logger.info("[" + host + "] " + String.join(" ", arguments));
             ProcessBuilder pb = new ProcessBuilder(arguments);
             //redirect the error of the tool to the standard output
             pb.redirectErrorStream(true);
@@ -56,7 +60,7 @@ public class ProcessExecutor extends Executor {
             }
             ret = process.exitValue();
         } catch (IOException e) {
-            logger.error("[[%s]] failed: %s", host, e.getMessage());
+            logger.error("[%s] failed: %s", host, e.getMessage());
             wasCancelled = true;
             throw e;
         } finally {
