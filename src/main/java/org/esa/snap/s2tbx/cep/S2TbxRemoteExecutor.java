@@ -197,7 +197,7 @@ public class S2TbxRemoteExecutor {
         logger.info(String.format("Scanning %s", path));
         List<Path> productFolders = Utilities.listFiles(path, 1);
         Files.createDirectories(masterLocalFolder.resolve(outputFolder));
-        ensurePermissions(osSuffix, master.getName(), masterLocalFolder.resolve(outputFolder), user, password);
+        ensurePermissions(osSuffix, master.getName(), master.getSshPort(), masterLocalFolder.resolve(outputFolder), user, password);
         List<Path> inputFiles = new ArrayList<>();
         for (Path productFolder : productFolders) {
             Optional<Path> inputFile = Optional.empty();
@@ -228,7 +228,7 @@ public class S2TbxRemoteExecutor {
         }
 
         int nodeIndex = 0;
-        Map<String, List<String>> jobArguments = new HashMap<>();
+        Map<Map.Entry<String, Integer>, List<String>> jobArguments = new HashMap<>();
         List<String> outFiles = new ArrayList<>();
         List<String> nodeNames = new ArrayList<>(nodes.keySet());
         /*
@@ -289,7 +289,7 @@ public class S2TbxRemoteExecutor {
                 }
                 Files.write(masterLocalFolder.resolve("slaveGraph" + String.valueOf(counter) + ".xml"), slaveGraph.toString().getBytes());
                 String finalTransformedCmdLine = transformedCmdLine;
-                jobArguments.put(nodeName, new ArrayList<String>() {{
+                jobArguments.put(new AbstractMap.SimpleEntry<String, Integer>(nodeName, node.getSshPort()), new ArrayList<String>() {{
                     add(finalTransformedCmdLine);
                 }});
                 outFiles.add(outFile);
@@ -305,8 +305,10 @@ public class S2TbxRemoteExecutor {
         if (!commandLine.hasOption(Constants.PARAM_RESUME_MASTER)) {
             Set<Executor> processes = new HashSet<>();
             sharedCounter = new CountDownLatch(jobArguments.size());
-            for (Map.Entry<String, List<String>> entry : jobArguments.entrySet()) {
-                Executor sshExecutor = Executor.create(ExecutorType.SSH2, entry.getKey(), entry.getValue(), sharedCounter);
+            for (Map.Entry<Map.Entry<String, Integer>, List<String>> entry : jobArguments.entrySet()) {
+                Executor sshExecutor = Executor.create(ExecutorType.SSH2,
+                        entry.getKey().getKey(), entry.getKey().getValue(),
+                        entry.getValue(), sharedCounter);
                 sshExecutor.setUser(commonUser);
                 sshExecutor.setPassword(commonPassword);
                 executorService.submit(sshExecutor);
@@ -342,9 +344,9 @@ public class S2TbxRemoteExecutor {
                 outFiles = outFiles.stream()
                         .map(name -> masterLocalFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
                         .collect(Collectors.toList());
-                outFiles.forEach(f -> ensurePermissions(osSuffix, master.getName(), f, user, password));
+                outFiles.forEach(f -> ensurePermissions(osSuffix, master.getName(), master.getSshPort(), f, user, password));
             } else {
-                ensurePermissions(osSuffix, master.getName(), masterLocalFolder, user, password);
+                ensurePermissions(osSuffix, master.getName(), master.getSshPort(), masterLocalFolder, user, password);
             }
             String masterCmdLine = templates.get(osSuffix).masterExecCommand;
             if (isSen2CorOrThree) {
@@ -357,7 +359,7 @@ public class S2TbxRemoteExecutor {
                     .replace(Constants.PLACEHOLDER_MASTER_INPUT, !isSen2CorOrThree ? String.join(" ", outFiles) : "")
                     .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, !isSen2CorOrThree ? normalizePath(resolve(outputFolder, osSuffix), osSuffix) : "");
             sharedCounter = new CountDownLatch(1);
-            executorService.submit(Executor.create(ExecutorType.PROCESS, master.getName(), Arrays.asList(masterCmdLine.split(" ")), sharedCounter));
+            executorService.submit(Executor.create(ExecutorType.PROCESS, master.getName(), master.getSshPort(), Arrays.asList(masterCmdLine.split(" ")), sharedCounter));
             try {
                 sharedCounter.await(waitTimeout * outFiles.size(), TimeUnit.MINUTES);
             } catch (InterruptedException e) {
@@ -420,9 +422,9 @@ public class S2TbxRemoteExecutor {
         return templates;
     }
 
-    private static void ensurePermissions(String nodeType, String nodeName, Path path, String usr, String pwd) {
+    private static void ensurePermissions(String nodeType, String nodeName, int port, Path path, String usr, String pwd) {
         Executor executor = Executor.create(ExecutorType.SSH2,
-                nodeName,
+                nodeName, port,
                 new ArrayList<String>() {{
                     add("chmod");
                     if (Files.isDirectory(path)) {
@@ -438,13 +440,13 @@ public class S2TbxRemoteExecutor {
         executorService.submit(executor);
     }
 
-    private static void ensurePermissions(String nodeType, String host, String path, String usr, String pwd) {
-        ensurePermissions(nodeType, host, Paths.get(path), usr, pwd);
+    private static void ensurePermissions(String nodeType, String host, int port, String path, String usr, String pwd) {
+        ensurePermissions(nodeType, host, port, Paths.get(path), usr, pwd);
     }
 
-    private static void checkPrerequisites(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
+    private static void checkPrerequisites(String nodeName, int port, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
         Executor executor = Executor.create(ExecutorType.SSH2,
-                nodeName,
+                nodeName, port,
                 new ArrayList<String>() {{
                     add("mkdir");
                     add(normalizePath(slaveMountFolder, nodeType));
@@ -466,9 +468,9 @@ public class S2TbxRemoteExecutor {
         executorService.submit(executor);
     }
 
-    private static void cleanup(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
+    private static void cleanup(String nodeName, int port, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {
         Executor executor = Executor.create(ExecutorType.SSH2,
-                nodeName,
+                nodeName, port,
                 new ArrayList<String>() {{
                     add("umount");
                     add(normalizePath(slaveMountFolder, nodeType));

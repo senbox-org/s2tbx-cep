@@ -8,6 +8,7 @@ import javax.xml.bind.annotation.XmlRootElement;
 @XmlRootElement(name = "node")
 public class Node {
     private String name;
+    private int sshPort;
     private String os;
     private String gptLocation;
     private String outputFormat;
@@ -18,6 +19,8 @@ public class Node {
     public void setName(String name) {
         this.name = name;
     }
+    public int getSshPort() { return sshPort; }
+    public void setSshPort(int sshPort) { this.sshPort = sshPort; }
     public String getOs() {
         return os;
     }

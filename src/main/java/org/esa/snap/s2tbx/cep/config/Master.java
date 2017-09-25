@@ -9,6 +9,7 @@ public class Master {
     private String localFolder;
     private String gptLocation;
     private String name;
+    private int port;
 
     public String getShare () { return share; }
     public void setShare (String share)
@@ -30,6 +31,14 @@ public class Master {
     public void setLocalFolder (String localFolder)
     {
         this.localFolder = localFolder;
+    }
+
+    public int getSshPort() {
+        return port;
+    }
+
+    public void setSshPort(int port) {
+        this.port = port;
     }
 
     public String getGptLocation() {

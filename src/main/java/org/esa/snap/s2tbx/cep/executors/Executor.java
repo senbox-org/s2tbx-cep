@@ -16,6 +16,7 @@ import java.util.concurrent.CountDownLatch;
 public abstract class Executor implements Runnable {
 
     protected String host;
+    protected int port;
     protected String user;
     protected String password;
     protected volatile boolean isStopped;
@@ -26,22 +27,22 @@ public abstract class Executor implements Runnable {
     protected boolean asSuperUser;
     protected CountDownLatch counter;
 
-    public static Executor create(ExecutorType type, String host, List<String> arguments, CountDownLatch synchronisationCounter) {
-        return create(type, host, arguments, false, synchronisationCounter, "exec");
+    public static Executor create(ExecutorType type, String host, int port, List<String> arguments, CountDownLatch synchronisationCounter) {
+        return create(type, host, port, arguments, false, synchronisationCounter, "exec");
     }
 
-    public static Executor create(ExecutorType type, String host, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter) {
-        return create(type, host, arguments, asSuperUser, synchronisationCounter, "exec");
+    public static Executor create(ExecutorType type, String host, int port, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter) {
+        return create(type, host, port, arguments, asSuperUser, synchronisationCounter, "exec");
     }
 
-    public static Executor create(ExecutorType type, String host, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter, String mode) {
+    public static Executor create(ExecutorType type, String host, int port, List<String> arguments, boolean asSuperUser, CountDownLatch synchronisationCounter, String mode) {
         Executor executor = null;
         switch (type) {
             case PROCESS:
                 executor = new ProcessExecutor(host, arguments, asSuperUser, synchronisationCounter);
                 break;
             case SSH2:
-                executor = new SSHExecutor(host, arguments, asSuperUser, synchronisationCounter, mode);
+                executor = new SSHExecutor(host, port, arguments, asSuperUser, synchronisationCounter, mode);
                 break;
         }
         return executor;
@@ -54,10 +55,11 @@ public abstract class Executor implements Runnable {
      * @param args          The arguments
      * @param sharedCounter The shared latch counter.
      */
-    public Executor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
+    public Executor(String host, int port, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
         this.isStopped = false;
         this.wasCancelled = false;
         this.host = host;
+        this.port = port;
         this.arguments = args;
         this.counter = sharedCounter;
         this.asSuperUser = asSU;
@@ -70,6 +72,8 @@ public abstract class Executor implements Runnable {
     public int getReturnCode() { return this.retCode; }
 
     public String getHost() { return this.host; }
+
+    public int getPort() { return this.port; }
 
     /**
      * Signals the stop of the execution.

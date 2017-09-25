@@ -1,18 +1,9 @@
 package org.esa.snap.s2tbx.cep.executors;
 
-import com.jcraft.jsch.Channel;
-import com.jcraft.jsch.ChannelExec;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
+import com.jcraft.jsch.*;
 import org.esa.snap.s2tbx.cep.Constants;
 
-import java.io.BufferedReader;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 
@@ -25,13 +16,13 @@ public class SSHExecutor extends Executor {
 
     private String mode;
 
-    public SSHExecutor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
-        super(host, args, asSU, sharedCounter);
+    public SSHExecutor(String host, int port, List<String> args, boolean asSU, CountDownLatch sharedCounter) {
+        super(host, port, args, asSU, sharedCounter);
         this.mode = "exec";
     }
 
-    public SSHExecutor(String host, List<String> args, boolean asSU, CountDownLatch sharedCounter, String mode) {
-        super(host, args, asSU, sharedCounter);
+    public SSHExecutor(String host, int port, List<String> args, boolean asSU, CountDownLatch sharedCounter, String mode) {
+        super(host, port, args, asSU, sharedCounter);
         this.mode = mode;
     }
 
@@ -48,7 +39,7 @@ public class SSHExecutor extends Executor {
             String cmdLine = String.join(" ", arguments);
             JSch jSch = new JSch();
             //jSch.setKnownHosts("D:\\known_hosts");
-            session = jSch.getSession(this.user, this.host, 22);
+            session = jSch.getSession(this.user, this.host, this.port);
             session.setUserInfo(new UserInfo(this.password));
             session.setPassword(password.getBytes());
             session.setConfig("StrictHostKeyChecking", "no");
