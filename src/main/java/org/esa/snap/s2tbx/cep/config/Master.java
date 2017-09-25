@@ -7,6 +7,8 @@ public class Master {
     private String share;
     private String waitTime;
     private String localFolder;
+    private String gptLocation;
+    private String name;
 
     public String getShare () { return share; }
     public void setShare (String share)
@@ -28,6 +30,22 @@ public class Master {
     public void setLocalFolder (String localFolder)
     {
         this.localFolder = localFolder;
+    }
+
+    public String getGptLocation() {
+        return gptLocation;
+    }
+
+    public void setGptLocation(String gptLocation) {
+        this.gptLocation = gptLocation;
+    }
+
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     @Override

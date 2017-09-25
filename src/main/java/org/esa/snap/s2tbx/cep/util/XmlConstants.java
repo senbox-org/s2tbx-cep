@@ -8,4 +8,5 @@ public class XmlConstants {
     public static final String LEVEL_2 = "    ";
     public static final String LEVEL_3 = "      ";
     public static final String LEVEL_4 = "        ";
+    public static final String LEVEL_5 = "          ";
 }

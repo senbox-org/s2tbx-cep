@@ -1,17 +1,7 @@
 package org.esa.snap.s2tbx.cep;
 
-import org.apache.commons.cli.CommandLine;
-import org.apache.commons.cli.CommandLineParser;
-import org.apache.commons.cli.DefaultParser;
-import org.apache.commons.cli.HelpFormatter;
-import org.apache.commons.cli.Option;
-import org.apache.commons.cli.Options;
-import org.esa.snap.s2tbx.cep.config.Execution;
-import org.esa.snap.s2tbx.cep.config.Master;
-import org.esa.snap.s2tbx.cep.config.Node;
-import org.esa.snap.s2tbx.cep.config.Search;
-import org.esa.snap.s2tbx.cep.config.Serializer;
-import org.esa.snap.s2tbx.cep.config.Slave;
+import org.apache.commons.cli.*;
+import org.esa.snap.s2tbx.cep.config.*;
 import org.esa.snap.s2tbx.cep.executors.Executor;
 import org.esa.snap.s2tbx.cep.executors.ExecutorType;
 import org.esa.snap.s2tbx.cep.graph.GraphDescriptor;
@@ -28,17 +18,7 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Enumeration;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -217,7 +197,7 @@ public class S2TbxRemoteExecutor {
         logger.info(String.format("Scanning %s", path));
         List<Path> productFolders = Utilities.listFiles(path, 1);
         Files.createDirectories(masterLocalFolder.resolve(outputFolder));
-        ensurePermissions(osSuffix, masterLocalFolder.resolve(outputFolder), user, password);
+        ensurePermissions(osSuffix, master.getName(), masterLocalFolder.resolve(outputFolder), user, password);
         List<Path> inputFiles = new ArrayList<>();
         for (Path productFolder : productFolders) {
             Optional<Path> inputFile = Optional.empty();
@@ -362,21 +342,22 @@ public class S2TbxRemoteExecutor {
                 outFiles = outFiles.stream()
                         .map(name -> masterLocalFolder.resolve(slaveMountFolder.relativize(Paths.get(name))).toString())
                         .collect(Collectors.toList());
-                outFiles.forEach(f -> ensurePermissions(osSuffix, f, user, password));
+                outFiles.forEach(f -> ensurePermissions(osSuffix, master.getName(), f, user, password));
             } else {
-                ensurePermissions(osSuffix, masterLocalFolder, user, password);
+                ensurePermissions(osSuffix, master.getName(), masterLocalFolder, user, password);
             }
             String masterCmdLine = templates.get(osSuffix).masterExecCommand;
             if (isSen2CorOrThree) {
                 masterCmdLine = masterCmdLine.replace(Constants.MASTER_CMD_OUTPUT_SECTION, "");
             }
-            masterCmdLine = masterCmdLine.replace(Constants.PLACEHOLDER_GPT, templates.get(osSuffix).masterGptCommand)
+            String gptPath = master.getGptLocation();
+            masterCmdLine = masterCmdLine.replace(Constants.PLACEHOLDER_GPT, gptPath != null ? gptPath : templates.get(osSuffix).masterGptCommand)
                     .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p " : "")
                     .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterLocalFolder, osSuffix))
                     .replace(Constants.PLACEHOLDER_MASTER_INPUT, !isSen2CorOrThree ? String.join(" ", outFiles) : "")
                     .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, !isSen2CorOrThree ? normalizePath(resolve(outputFolder, osSuffix), osSuffix) : "");
             sharedCounter = new CountDownLatch(1);
-            executorService.submit(Executor.create(ExecutorType.PROCESS, "master", Arrays.asList(masterCmdLine.split(" ")), sharedCounter));
+            executorService.submit(Executor.create(ExecutorType.PROCESS, master.getName(), Arrays.asList(masterCmdLine.split(" ")), sharedCounter));
             try {
                 sharedCounter.await(waitTimeout * outFiles.size(), TimeUnit.MINUTES);
             } catch (InterruptedException e) {
@@ -439,9 +420,9 @@ public class S2TbxRemoteExecutor {
         return templates;
     }
 
-    private static void ensurePermissions(String nodeType, Path path, String usr, String pwd) {
+    private static void ensurePermissions(String nodeType, String nodeName, Path path, String usr, String pwd) {
         Executor executor = Executor.create(ExecutorType.SSH2,
-                "master",
+                nodeName,
                 new ArrayList<String>() {{
                     add("chmod");
                     if (Files.isDirectory(path)) {
@@ -457,8 +438,8 @@ public class S2TbxRemoteExecutor {
         executorService.submit(executor);
     }
 
-    private static void ensurePermissions(String nodeType, String path, String usr, String pwd) {
-        ensurePermissions(nodeType, Paths.get(path), usr, pwd);
+    private static void ensurePermissions(String nodeType, String host, String path, String usr, String pwd) {
+        ensurePermissions(nodeType, host, Paths.get(path), usr, pwd);
     }
 
     private static void checkPrerequisites(String nodeName, String nodeType, String usr, String pwd, CountDownLatch sharedCounter) {

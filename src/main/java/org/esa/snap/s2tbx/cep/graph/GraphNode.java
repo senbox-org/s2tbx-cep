@@ -2,11 +2,7 @@ package org.esa.snap.s2tbx.cep.graph;
 
 import org.esa.snap.s2tbx.cep.util.XmlConstants;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by kraftek on 9/6/2016.
@@ -15,11 +11,15 @@ public class GraphNode {
 
     private String operator;
     private Map<String, Object> parameters;
+    private Map<String, String> variables;
+    private Map<String, String> conditions;
     private GraphNode previous;
 
     GraphNode(String operator) {
         this.operator = operator;
         this.parameters = new HashMap<>();
+        this.variables = new HashMap<>();
+        this.conditions = new HashMap<>();
     }
 
     GraphNode(String operator, String arguments, GraphNode previous) {
@@ -40,10 +40,16 @@ public class GraphNode {
         this.parameters.put(name, value);
     }
 
+    public void setVariable(String name, String value) { this.variables.put(name, value); }
+
+    public void setCondition(String name, String value) { this.conditions.put(name, value); }
+
     public String parametersToString() {
         StringBuilder builder = new StringBuilder();
         builder.append(XmlConstants.LEVEL_3).append("<parameters class=\"com.bc.ceres.binding.dom.XppDomElement\">\n");
         if (parameters != null) {
+            builder.append(variablesToString());
+            builder.append(conditionsToString());
             for (Map.Entry<String, Object> entry : parameters.entrySet()) {
                 builder.append(XmlConstants.LEVEL_4).append("<").append(entry.getKey()).append(">");
                 Object value = entry.getValue();
@@ -54,6 +60,36 @@ public class GraphNode {
             }
         }
         builder.append(XmlConstants.LEVEL_3).append("</parameters>\n");
+        return builder.toString();
+    }
+
+    public String variablesToString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(XmlConstants.LEVEL_4).append("<variables>\n");
+        if (variables != null) {
+            for (Map.Entry<String, String> entry : variables.entrySet()) {
+                builder.append(XmlConstants.LEVEL_5).append("<variable>\n");
+                builder.append(XmlConstants.LEVEL_5).append("<name>").append(entry.getKey()).append("</name>\n");
+                builder.append(XmlConstants.LEVEL_5).append("<expression>").append(entry.getValue()).append("</expression>\n");
+                builder.append(XmlConstants.LEVEL_5).append("</variable>\n");
+            }
+        }
+        builder.append(XmlConstants.LEVEL_4).append("</variables>\n");
+        return builder.toString();
+    }
+
+    public String conditionsToString() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(XmlConstants.LEVEL_4).append("<conditions>\n");
+        if (conditions != null) {
+            for (Map.Entry<String, String> entry : conditions.entrySet()) {
+                builder.append(XmlConstants.LEVEL_5).append("<condition>\n");
+                builder.append(XmlConstants.LEVEL_5).append("<name>").append(entry.getKey()).append("</name>\n");
+                builder.append(XmlConstants.LEVEL_5).append("<expression>").append(entry.getValue()).append("</expression>\n");
+                builder.append(XmlConstants.LEVEL_5).append("</condition>\n");
+            }
+        }
+        builder.append(XmlConstants.LEVEL_3).append("</conditions>\n");
         return builder.toString();
     }
 

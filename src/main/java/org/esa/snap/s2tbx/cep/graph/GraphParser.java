@@ -31,6 +31,8 @@ public class GraphParser {
         private GraphNode currentNode;
         private StringBuilder buffer = new StringBuilder(512);
         private boolean isInParameterCollection;
+        private String currentName;
+        private String currentValue;
 
         public GraphDescriptor getResult() { return this.result; }
 
@@ -82,6 +84,21 @@ public class GraphParser {
                     break;
                 case "parameters":
                     isInParameterCollection = false;
+                    break;
+                case "name":
+                    currentName = buffer.toString();
+                    break;
+                case "expression":
+                    currentValue = buffer.toString();
+                    break;
+                case "variable":
+                    currentNode.setVariable(currentName, currentValue);
+                    break;
+                case "condition":
+                    currentNode.setCondition(currentName, currentValue);
+                    break;
+                case "variables":
+                case "conditions":
                     break;
                 default:
                     if (isInParameterCollection) {
