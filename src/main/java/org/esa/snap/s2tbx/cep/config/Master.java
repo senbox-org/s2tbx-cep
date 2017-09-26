@@ -10,6 +10,7 @@ public class Master {
     private String gptLocation;
     private String name;
     private int port;
+    private String format;
 
     public String getShare () { return share; }
     public void setShare (String share)
@@ -32,30 +33,24 @@ public class Master {
     {
         this.localFolder = localFolder;
     }
-
-    public int getSshPort() {
-        return port;
-    }
-
+    public int getSshPort() { return port; }
     public void setSshPort(int port) {
         this.port = port;
     }
-
     public String getGptLocation() {
         return gptLocation;
     }
-
     public void setGptLocation(String gptLocation) {
         this.gptLocation = gptLocation;
     }
-
     public String getName() {
         return name;
     }
-
     public void setName(String name) {
         this.name = name;
     }
+    public String getFormat() { return format; }
+    public void setFormat(String format) { this.format = format; }
 
     @Override
     public String toString() {

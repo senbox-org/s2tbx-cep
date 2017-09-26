@@ -289,9 +289,10 @@ public class S2TbxRemoteExecutor {
                 }
                 Files.write(masterLocalFolder.resolve("slaveGraph" + String.valueOf(counter) + ".xml"), slaveGraph.toString().getBytes());
                 String finalTransformedCmdLine = transformedCmdLine;
-                jobArguments.put(new AbstractMap.SimpleEntry<String, Integer>(nodeName, node.getSshPort()), new ArrayList<String>() {{
+                jobArguments.put(new AbstractMap.SimpleEntry<>(nodeName, node.getSshPort()), new ArrayList<String>() {{
                     add(finalTransformedCmdLine);
                 }});
+                logger.info("%s assigned to node %s", outFile, nodeName);
                 outFiles.add(outFile);
                 nodeIndex = (nodeIndex == nodes.size() - 1) ? 0 : nodeIndex + 1;
             } catch (Exception e) {
@@ -357,6 +358,7 @@ public class S2TbxRemoteExecutor {
                     .replace(Constants.PLACEHOLDER_MASTER_OPT, isMosaic ? "Mosaic -p " : "")
                     .replace(Constants.PLACEHOLDER_INPUT_FOLDER, normalizePath(masterLocalFolder, osSuffix))
                     .replace(Constants.PLACEHOLDER_MASTER_INPUT, !isSen2CorOrThree ? String.join(" ", outFiles) : "")
+                    .replace(Constants.PLACEHOLDER_MASTER_FORMAT, master.getFormat() != null ? master.getFormat() : "GeoTIFF")
                     .replace(Constants.PLACEHOLDER_OUTPUT_FOLDER, !isSen2CorOrThree ? normalizePath(resolve(outputFolder, osSuffix), osSuffix) : "");
             sharedCounter = new CountDownLatch(1);
             executorService.submit(Executor.create(ExecutorType.PROCESS, master.getName(), master.getSshPort(), Arrays.asList(masterCmdLine.split(" ")), sharedCounter));

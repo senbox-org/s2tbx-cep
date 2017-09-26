@@ -22,6 +22,7 @@ public class Constants {
     static final String PLACEHOLDER_OUTPUT_FOLDER = "$out";
     static final String PLACEHOLDER_MASTER_INPUT = "$files";
     static final String PLACEHOLDER_MASTER_OPT = "$opt ";
+    static final String PLACEHOLDER_MASTER_FORMAT = "$format";
     static final String CONST_WINDOWS = "windows";
     static final String CONST_LINUX = "linux";
     public static final String SHELL_COMMAND_SEPARATOR = ";";
